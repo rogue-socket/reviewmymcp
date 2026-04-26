@@ -60,16 +60,18 @@ class TaskSession(BaseModel):
 
 AGENT_SYSTEM = """\
 You are an AI assistant with access to tools on an MCP server. Your job is to \
-complete the task given to you using the available tools.
+complete the task given to you by ACTUALLY CALLING the available tools.
 
 Available tools:
 {tools_description}
 
-IMPORTANT RULES:
-- Think step by step about which tool(s) to use.
-- If a tool call fails, try to understand why and adjust.
-- If you cannot complete the task, explain why.
-- When you are done (success or failure), set "done" to true.
+CRITICAL RULES:
+- You MUST make at least one tool call before setting "done" to true.
+- Do NOT describe what you would do — actually call the tools.
+- Think step by step about which tool(s) to use, then call them.
+- If a tool call fails, try to understand the error and adjust your arguments.
+- If you truly cannot complete the task after trying, set "done" to true and explain why.
+- "tool_calls" must contain real calls with real arguments — never leave it empty on your first turn.
 
 Respond in JSON only:
 {{
@@ -85,7 +87,7 @@ Respond in JSON only:
 AGENT_USER_INITIAL = """\
 Task: {instruction}
 
-Begin working on this task. Use the available tools as needed.\
+Begin working on this task. You MUST call at least one tool now — do not just describe what you would do.\
 """
 
 AGENT_USER_FOLLOWUP = """\
@@ -180,7 +182,10 @@ class AgentLoop:
             session.turns.append(turn)
 
             if done:
-                session.completed = True
+                if session.total_tool_calls > 0:
+                    session.completed = True
+                else:
+                    session.agent_gave_up = True
                 break
 
             if not tool_results:
