@@ -48,6 +48,20 @@ def cli() -> None:
     pass
 
 
+def _build_judge(provider_name: str, model: str):
+    """Construct a JudgeProvider from config strings. Returns None on failure."""
+    if provider_name == "anthropic":
+        from reviewmymcp.judge.anthropic_judge import AnthropicJudge
+        return AnthropicJudge(model=model) if model else AnthropicJudge()
+    elif provider_name == "gemini":
+        from reviewmymcp.judge.gemini_judge import GeminiJudge
+        return GeminiJudge(model=model) if model else GeminiJudge()
+    elif provider_name == "openai":
+        from reviewmymcp.judge.openai_judge import OpenAIJudge
+        return OpenAIJudge(model=model) if model else OpenAIJudge()
+    return None
+
+
 @cli.command()
 @click.argument("target", required=False)
 @click.option("--log-file", type=click.Path(exists=True), help="Use captured logs instead of live traffic")
@@ -119,17 +133,30 @@ def audit(
 
     dim_list = [d.strip() for d in dimensions.split(",")] if dimensions else None
 
+    judge_adapter = None
+    if not no_llm_judges:
+        from reviewmymcp.judge.base import SyncJudgeAdapter
+        judge_instance = _build_judge(audit_config.judge.provider, audit_config.judge.model)
+        if judge_instance:
+            judge_adapter = SyncJudgeAdapter(judge_instance)
+
     eval_config = EvaluatorConfig(
         thresholds=audit_config.thresholds,
         judge_provider=audit_config.judge.provider,
         judge_model=audit_config.judge.model,
+        judge=judge_adapter,
         extra=audit_config.model_dump(),
     )
-    if no_llm_judges:
-        eval_config.enabled_checks = []
 
     results = run_all(events, server_meta, eval_config, dimensions=dim_list)
-    report = grade_results(results, server_meta, total_events=len(events), total_sessions=len(sessions))
+
+    tool_count = len(server_meta.tools)
+    call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
+    report = grade_results(
+        results, server_meta,
+        total_events=len(events), total_sessions=len(sessions),
+        tool_count=tool_count, call_count=call_count,
+    )
 
     _output_report(report, output_format, output_file)
     sys.exit(1 if any(f.severity.value in ("critical", "high") for f in report.top_findings) else 0)
@@ -147,6 +174,8 @@ def audit(
 @click.option("--dimensions", type=str, default=None)
 @click.option("--no-redact", is_flag=True, default=False)
 @click.option("--no-llm-judges", is_flag=True, default=False)
+@click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
+@click.option("--judge-model", type=str, default="")
 def replay(
     log_file: str,
     output_format: str,
@@ -154,6 +183,8 @@ def replay(
     dimensions: str | None,
     no_redact: bool,
     no_llm_judges: bool,
+    judge_provider: str,
+    judge_model: str,
 ) -> None:
     """Replay a captured log file through evaluators."""
     from reviewmymcp.evaluators.base import EvaluatorConfig
@@ -170,12 +201,31 @@ def replay(
     server_meta = extract_server_meta(events)
     sessions = get_sessions(events)
 
+    judge_adapter = None
+    if not no_llm_judges:
+        from reviewmymcp.judge.base import SyncJudgeAdapter
+        judge_instance = _build_judge(judge_provider, judge_model)
+        if judge_instance:
+            judge_adapter = SyncJudgeAdapter(judge_instance)
+
     dim_list = [d.strip() for d in dimensions.split(",")] if dimensions else None
-    eval_config = EvaluatorConfig()
+    eval_config = EvaluatorConfig(
+        judge_provider=judge_provider,
+        judge_model=judge_model,
+        judge=judge_adapter,
+    )
     results = run_all(events, server_meta, eval_config, dimensions=dim_list)
-    report = grade_results(results, server_meta, total_events=len(events), total_sessions=len(sessions))
+
+    tool_count = len(server_meta.tools)
+    call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
+    report = grade_results(
+        results, server_meta,
+        total_events=len(events), total_sessions=len(sessions),
+        tool_count=tool_count, call_count=call_count,
+    )
 
     _output_report(report, output_format, output_file)
+    sys.exit(1 if any(f.severity.value in ("critical", "high") for f in report.top_findings) else 0)
 
 
 @cli.command()
@@ -193,7 +243,6 @@ def diff(baseline: str, current: str) -> None:
     result = diff_reports(baseline_report, current_report)
 
     console = Console()
-    console.print(f"\nBaseline: {result.baseline_grade.value} → Current: {result.current_grade.value}")
 
     for dd in result.dimension_diffs:
         indicator = ""
@@ -201,7 +250,10 @@ def diff(baseline: str, current: str) -> None:
             indicator = " [red]↓ REGRESSION[/red]"
         elif dd.is_improvement:
             indicator = " [green]↑ improved[/green]"
-        console.print(f"  {dd.dimension}: {dd.baseline_grade.value} → {dd.current_grade.value}{indicator}")
+        console.print(
+            f"  {dd.dimension}: {dd.baseline_grade.value} ({dd.baseline_score:.0f})"
+            f" → {dd.current_grade.value} ({dd.current_score:.0f}){indicator}"
+        )
 
     if result.new_findings:
         console.print(f"\n[red]New findings: {len(result.new_findings)}[/red]")
@@ -238,6 +290,232 @@ def list_checks() -> None:
         t.add_row(evaluator.dimension, "\n".join(checks))
 
     console.print(t)
+
+
+@cli.command("active-audit")
+@click.argument("target")
+@click.option("--agent-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
+@click.option("--agent-model", type=str, default="")
+@click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
+@click.option("--judge-model", type=str, default="")
+@click.option("--max-turns", type=int, default=15)
+@click.option(
+    "--output",
+    "output_format",
+    type=click.Choice(["terminal", "json"]),
+    default="terminal",
+)
+@click.option("--output-file", type=click.Path(), default=None)
+@click.option("--categories", type=str, default=None, help="Comma-separated task categories")
+def active_audit(
+    target: str,
+    agent_provider: str,
+    agent_model: str,
+    judge_provider: str,
+    judge_model: str,
+    max_turns: int,
+    output_format: str,
+    output_file: str | None,
+    categories: str | None,
+) -> None:
+    """Run active agent-driven usability testing against a live MCP server."""
+    import asyncio
+
+    asyncio.run(
+        _run_active_audit(
+            target, agent_provider, agent_model, judge_provider, judge_model,
+            max_turns, output_format, output_file, categories,
+        )
+    )
+
+
+async def _run_active_audit(
+    target: str,
+    agent_provider_name: str,
+    agent_model: str,
+    judge_provider_name: str,
+    judge_model: str,
+    max_turns: int,
+    output_format: str,
+    output_file: str | None,
+    categories_str: str | None,
+) -> None:
+    """Async implementation of active-audit."""
+    from reviewmymcp.active.agent_loop import AgentLoop
+    from reviewmymcp.active.models import TaskCategory
+    from reviewmymcp.active.scorer import score_executions
+    from reviewmymcp.active.task_generator import TaskGenerator
+    from reviewmymcp.ingest.normalizer import extract_server_meta
+    from reviewmymcp.ingest.schema import ToolDefinition
+    from reviewmymcp.synthetic.agent_driver import StdioAgentDriver
+
+    console = Console()
+
+    # Parse categories
+    if categories_str:
+        cat_list = [TaskCategory(c.strip()) for c in categories_str.split(",")]
+    else:
+        cat_list = None
+
+    # Build agent provider
+    agent_prov = _build_agent_provider(agent_provider_name, agent_model)
+    if agent_prov is None:
+        click.echo(f"Error: could not build agent provider '{agent_provider_name}'", err=True)
+        sys.exit(2)
+
+    # Build judge for task generation
+    judge_instance = _build_judge(judge_provider_name, judge_model)
+
+    # Start MCP server
+    server_command = target.split()
+    driver = StdioAgentDriver(server_command=server_command, redact=True)
+
+    try:
+        await driver.start()
+        console.print("[dim]Initializing server...[/dim]", highlight=False)
+        await driver.initialize()
+        await driver.send_initialized()
+
+        console.print("[dim]Discovering tools...[/dim]", highlight=False)
+        tools_result = await driver.list_tools()
+
+        tools: list[ToolDefinition] = []
+        if tools_result and "result" in tools_result:
+            for t in tools_result["result"].get("tools", []):
+                tools.append(
+                    ToolDefinition(
+                        name=t.get("name", ""),
+                        description=t.get("description", ""),
+                        input_schema=t.get("inputSchema", {}),
+                    )
+                )
+
+        console.print(f"[dim]Found {len(tools)} tools. Generating tasks...[/dim]", highlight=False)
+
+        # Generate tasks
+        generator = TaskGenerator(judge_provider=judge_instance)
+        tasks = await generator.generate_tasks(tools, categories=cat_list)
+        console.print(f"[dim]Generated {len(tasks)} tasks. Running agent...[/dim]", highlight=False)
+
+        # Run agent loop for each task
+        loop = AgentLoop(
+            agent_provider=agent_prov,
+            call_tool_fn=driver.call_tool,
+            tools=tools,
+            max_turns=max_turns,
+        )
+
+        executions = []
+        for i, task in enumerate(tasks, 1):
+            console.print(f"[dim]  Task {i}/{len(tasks)}: {task.description[:60]}...[/dim]", highlight=False)
+            execution = await loop.execute_task(task)
+            executions.append(execution)
+
+        # Score
+        server_meta = extract_server_meta(driver.events)
+        report = score_executions(executions, server_meta)
+
+        console.print(f"[dim]Completed {len(executions)} tasks in {report.total_turns} turns.[/dim]", highlight=False)
+
+        # Output
+        _output_active_report(report, output_format, output_file, console)
+
+    finally:
+        await driver.stop()
+
+
+def _build_agent_provider(provider_name: str, model: str):
+    """Construct an AgentProvider from config strings."""
+    if provider_name == "anthropic":
+        from reviewmymcp.judge.anthropic_agent import AnthropicAgentProvider
+        return AnthropicAgentProvider(model=model) if model else AnthropicAgentProvider()
+    elif provider_name == "openai":
+        from reviewmymcp.judge.openai_agent import OpenAIAgentProvider
+        return OpenAIAgentProvider(model=model) if model else OpenAIAgentProvider()
+    elif provider_name == "gemini":
+        from reviewmymcp.judge.gemini_agent import GeminiAgentProvider
+        return GeminiAgentProvider(model=model) if model else GeminiAgentProvider()
+    return None
+
+
+def _output_active_report(report, output_format: str, output_file: str | None, console) -> None:
+    """Render the active audit report."""
+    if output_format == "json":
+        output = report.model_dump_json(indent=2)
+        if output_file:
+            Path(output_file).write_text(output, encoding="utf-8")
+        else:
+            click.echo(output)
+    else:
+        from rich.panel import Panel
+        from rich.table import Table
+
+        table = Table(title="Active Audit — Dimension Scores")
+        table.add_column("Dimension")
+        table.add_column("Score", justify="right")
+        table.add_column("Grade", justify="center")
+
+        for ds in report.dimension_scores:
+            table.add_row(ds.dimension, f"{ds.score:.0f}", ds.grade)
+
+        console.print(Panel(table))
+
+        # Task outcomes
+        console.print(f"\nTasks: {report.total_tasks}  Turns: {report.total_turns}")
+        for ex in report.task_executions:
+            status = {"success": "[green]OK[/green]", "partial": "[yellow]PARTIAL[/yellow]",
+                       "failure": "[red]FAIL[/red]", "gave_up": "[red]GAVE UP[/red]"}.get(ex.outcome, ex.outcome)
+            console.print(f"  [{ex.task.category.value}] {status} {ex.task.description[:70]}")
+
+        if output_file:
+            Path(output_file).write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "log_format",
+    type=click.Choice(["auto", "passthrough", "claude-desktop", "python-sdk"]),
+    default="auto",
+    help="Source log format (auto-detect by default)",
+)
+@click.option("--output-file", type=click.Path(), default=None, help="Output path (default: stdout)")
+def convert(input_file: str, log_format: str, output_file: str | None) -> None:
+    """Convert MCP logs from various sources to canonical NDJSON format."""
+    import json
+
+    from reviewmymcp.ingest.converter import build_registry
+
+    registry = build_registry()
+    input_path = Path(input_file)
+
+    if log_format == "auto":
+        # Auto-detect: try passthrough first (most common case)
+        converter = registry.get("passthrough")
+    else:
+        converter = registry.get(log_format)
+
+    if converter is None:
+        click.echo(f"Error: unknown format '{log_format}'", err=True)
+        sys.exit(2)
+
+    try:
+        records = converter.convert(input_path)
+    except NotImplementedError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(2)
+    except (ValueError, json.JSONDecodeError) as e:
+        click.echo(f"Error parsing {input_file}: {e}", err=True)
+        sys.exit(1)
+
+    output = "\n".join(json.dumps(r) for r in records) + "\n"
+
+    if output_file:
+        Path(output_file).write_text(output, encoding="utf-8")
+        click.echo(f"Wrote {len(records)} records to {output_file}", err=True)
+    else:
+        click.echo(output, nl=False)
 
 
 async def _run_synthetic_audit(

@@ -12,6 +12,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -51,15 +52,16 @@ class AccuracyEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
+        skipped: list[SkippedCheck] = []
         req_map = _build_request_map(events)
         resp_map = _response_map(events)
         tool_lookup = {t.name: t for t in server_meta.tools}
 
         findings.extend(self._check_schema_misuse(req_map, resp_map, tool_lookup))
-        findings.extend(self._check_output_drift(events, req_map))
+        findings.extend(self._check_output_drift(events, req_map, skipped))
         findings.extend(self._check_validation_gap(req_map, resp_map, tool_lookup))
         findings.extend(self._check_error_message_quality(events, req_map))
-        # description-accuracy is an LLM judge check — placeholder
+        findings.extend(self._check_description_accuracy(events, req_map, resp_map, server_meta, config, skipped))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -71,6 +73,7 @@ class AccuracyEvaluator:
                 "accuracy.description-accuracy",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
     def _check_schema_misuse(
@@ -138,7 +141,7 @@ class AccuracyEvaluator:
                 )
         return findings
 
-    def _check_output_drift(self, events: list[McpEvent], req_map: dict[str, McpEvent]) -> list[Finding]:
+    def _check_output_drift(self, events: list[McpEvent], req_map: dict[str, McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         findings: list[Finding] = []
         tool_outputs: dict[str, list[list[str]]] = defaultdict(list)
 
@@ -156,8 +159,10 @@ class AccuracyEvaluator:
                     keys.extend(sorted(item.keys()))
             tool_outputs[name].append(keys)
 
+        skipped_tools = 0
         for name, all_keys in tool_outputs.items():
             if len(all_keys) < 3:
+                skipped_tools += 1
                 continue
             key_strs = [json.dumps(k) for k in all_keys]
             from collections import Counter
@@ -182,6 +187,11 @@ class AccuracyEvaluator:
                         affected_entity=name,
                     )
                 )
+        if skipped_tools:
+            skipped.append(SkippedCheck(
+                check_id="accuracy.output-schema-drift",
+                reason=f"fewer than 3 responses for {skipped_tools} tool(s)",
+            ))
         return findings
 
     def _check_validation_gap(
@@ -226,6 +236,94 @@ class AccuracyEvaluator:
                     affected_entity=name,
                 )
             )
+        return findings
+
+    def _check_description_accuracy(
+        self,
+        events: list[McpEvent],
+        req_map: dict[str, McpEvent],
+        resp_map: dict[str, McpEvent],
+        server_meta: ServerMeta,
+        config: EvaluatorConfig,
+        skipped: list[SkippedCheck],
+    ) -> list[Finding]:
+        if config.judge is None:
+            skipped.append(SkippedCheck(
+                check_id="accuracy.description-accuracy",
+                reason="LLM judge not enabled",
+            ))
+            return []
+
+        from reviewmymcp.judge.base import JudgeRequest
+        from reviewmymcp.judge.prompts import DESCRIPTION_ACCURACY_SYSTEM, DESCRIPTION_ACCURACY_USER
+
+        findings: list[Finding] = []
+        for tool in server_meta.tools:
+            tool_calls = [(eid, req) for eid, req in req_map.items()
+                          if req.params and req.params.get("name") == tool.name]
+            if not tool_calls:
+                continue
+
+            total = len(tool_calls)
+            successes = sum(1 for eid, _ in tool_calls
+                            if eid in resp_map and _is_success(resp_map[eid]))
+            errors = total - successes
+
+            success_outputs: list[str] = []
+            error_messages: list[str] = []
+            latencies: list[float] = []
+            for eid, _req in tool_calls:
+                resp = resp_map.get(eid)
+                if not resp:
+                    continue
+                if resp.latency_ms:
+                    latencies.append(resp.latency_ms)
+                if _is_success(resp) and resp.result:
+                    for item in resp.result.get("content", []):
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            success_outputs.append(item["text"][:200])
+                elif resp.error:
+                    error_messages.append(resp.error.get("message", "")[:100])
+
+            avg_latency = sum(latencies) / len(latencies) if latencies else 0
+
+            user_prompt = DESCRIPTION_ACCURACY_USER.format(
+                name=tool.name,
+                description=tool.description,
+                total_calls=total,
+                successful_calls=successes,
+                error_calls=errors,
+                success_outputs=success_outputs[:3],
+                error_messages=error_messages[:3],
+                avg_latency_ms=f"{avg_latency:.0f}",
+            )
+
+            response = config.judge.complete(JudgeRequest(
+                system=DESCRIPTION_ACCURACY_SYSTEM,
+                user=user_prompt,
+            ))
+
+            if response.parsed is None:
+                skipped.append(SkippedCheck(
+                    check_id="accuracy.description-accuracy",
+                    reason=f"judge call failed for tool '{tool.name}'",
+                ))
+                continue
+
+            score = response.parsed.get("score", 5)
+            if score <= 2:
+                findings.append(Finding(
+                    check_id="accuracy.description-accuracy",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool.name}` description inaccurate (score {score}/5)",
+                    description=response.parsed.get("rationale", ""),
+                    evidence={
+                        "score": score,
+                        "discrepancies": response.parsed.get("discrepancies", []),
+                    },
+                    remediation="Update the tool description to match its observed behavior.",
+                    affected_entity=tool.name,
+                ))
         return findings
 
     def _check_error_message_quality(self, events: list[McpEvent], req_map: dict[str, McpEvent]) -> list[Finding]:

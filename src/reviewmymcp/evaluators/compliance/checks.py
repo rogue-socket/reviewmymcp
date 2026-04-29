@@ -9,6 +9,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -30,10 +31,11 @@ class ComplianceEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
+        skipped: list[SkippedCheck] = []
         findings.extend(self._check_pii(events))
         findings.extend(self._check_audit_trail(events))
         findings.extend(self._check_consent_flows(events, server_meta))
-        findings.extend(self._check_data_residency(events, config))
+        findings.extend(self._check_data_residency(events, config, skipped))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -44,6 +46,7 @@ class ComplianceEvaluator:
                 "compliance.data-residency-signals",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
     def _check_pii(self, events: list[McpEvent]) -> list[Finding]:
@@ -163,10 +166,14 @@ class ComplianceEvaluator:
                         )
         return findings
 
-    def _check_data_residency(self, events: list[McpEvent], config: EvaluatorConfig) -> list[Finding]:
+    def _check_data_residency(self, events: list[McpEvent], config: EvaluatorConfig, skipped: list[SkippedCheck]) -> list[Finding]:
         findings: list[Finding] = []
         expected_regions = config.extra.get("expected_regions", [])
         if not expected_regions:
+            skipped.append(SkippedCheck(
+                check_id="compliance.data-residency-signals",
+                reason="no expected_regions configured",
+            ))
             return findings
 
         region_patterns = [

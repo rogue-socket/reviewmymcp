@@ -35,38 +35,49 @@ def render_report(report: AuditReport, console: Console | None = None) -> None:
     header.append(f"Server: {report.server_meta.server_name} v{report.server_meta.server_version}\n")
     header.append(f"Protocol: {report.server_meta.protocol_version}\n")
     header.append(f"Date: {report.timestamp.strftime('%Y-%m-%d %H:%M UTC')}\n")
-    header.append(f"Events: {report.total_events}  Sessions: {report.total_sessions}\n")
-
-    grade_text = Text(
-        f"  {report.overall_grade.value}  ",
-        style=f"bold {GRADE_COLORS.get(report.overall_grade, 'white')} on black",
-    )
-    header.append("\nOverall Grade: ")
-    header.append(grade_text)
+    header.append(f"Events: {report.total_events}  Sessions: {report.total_sessions}")
+    if report.tool_count:
+        header.append(f"  Tools: {report.tool_count}")
+    if report.call_count:
+        header.append(f"  Calls: {report.call_count}")
 
     console.print(Panel(header, title="reviewmymcp", border_style="blue"))
 
+    # Dimension scores table
     dim_table = Table(title="Dimension Scores", show_header=True)
     dim_table.add_column("Dimension", style="bold")
+    dim_table.add_column("Score", justify="right")
     dim_table.add_column("Grade", justify="center")
     dim_table.add_column("Critical", justify="right")
     dim_table.add_column("High", justify="right")
     dim_table.add_column("Medium", justify="right")
     dim_table.add_column("Low", justify="right")
+    dim_table.add_column("Skipped", justify="right")
 
     for ds in sorted(report.dimension_scores, key=lambda d: d.dimension):
         grade_style = GRADE_COLORS.get(ds.grade, "white")
+        skipped = str(len(ds.checks_skipped)) if ds.checks_skipped else "-"
         dim_table.add_row(
             ds.dimension,
+            f"{ds.score:.0f}",
             Text(ds.grade.value, style=grade_style),
             str(ds.critical_count) if ds.critical_count else "-",
             str(ds.high_count) if ds.high_count else "-",
             str(ds.medium_count) if ds.medium_count else "-",
             str(ds.low_count) if ds.low_count else "-",
+            skipped,
         )
 
     console.print(dim_table)
 
+    # Skipped checks detail
+    all_skipped = [(ds.dimension, sc) for ds in report.dimension_scores for sc in ds.checks_skipped]
+    if all_skipped:
+        console.print("\n[bold]Skipped Checks[/bold] [dim](insufficient data)[/dim]")
+        for dim, sc in all_skipped:
+            console.print(f"  [dim]{sc.check_id}[/dim]: {sc.reason}")
+
+    # Top findings
     if report.top_findings:
         console.print("\n[bold]Top Findings[/bold]")
         for i, finding in enumerate(report.top_findings, 1):
@@ -77,14 +88,3 @@ def render_report(report: AuditReport, console: Console | None = None) -> None:
                 console.print(f"     [dim]Fix: {finding.remediation}[/dim]")
 
     console.print()
-
-
-def _format_dimension_score(ds: DimensionScore) -> str:
-    parts = []
-    if ds.critical_count:
-        parts.append(f"{ds.critical_count} critical")
-    if ds.high_count:
-        parts.append(f"{ds.high_count} high")
-    if ds.medium_count:
-        parts.append(f"{ds.medium_count} medium")
-    return f"{ds.grade.value}  ({', '.join(parts)})" if parts else f"{ds.grade.value}  (no findings)"

@@ -2,7 +2,7 @@
 
 import json
 
-from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity
+from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity, SkippedCheck
 from reviewmymcp.reporting.html_report import render_html
 from reviewmymcp.reporting.json_report import render_json
 from reviewmymcp.reporting.sarif_report import render_sarif
@@ -29,21 +29,48 @@ def _make_report():
             affected_entity="search_tool",
         ),
     ]
+    skipped = [SkippedCheck(check_id="security.auth-flow", reason="no HTTP traffic")]
     results = [
-        EvaluatorResult(dimension="security", checks_run=["security.secret-leakage"], findings=[findings[0]]),
+        EvaluatorResult(
+            dimension="security",
+            checks_run=["security.secret-leakage"],
+            findings=[findings[0]],
+            checks_skipped=skipped,
+        ),
         EvaluatorResult(dimension="efficiency", checks_run=["efficiency.description-bloat"], findings=[findings[1]]),
     ]
-    return grade_results(results, make_server_meta(), total_events=50, total_sessions=3)
+    return grade_results(results, make_server_meta(), total_events=50, total_sessions=3, tool_count=10, call_count=30)
 
 
 def test_json_output_valid():
     report = _make_report()
     output = render_json(report)
     parsed = json.loads(output)
-    assert parsed["overall_grade"] == "D"
+    assert "overall_grade" not in parsed
     assert len(parsed["dimension_scores"]) == 2
     assert len(parsed["top_findings"]) == 2
     assert parsed["total_events"] == 50
+    assert parsed["tool_count"] == 10
+    assert parsed["call_count"] == 30
+
+
+def test_json_dimension_has_score():
+    report = _make_report()
+    output = render_json(report)
+    parsed = json.loads(output)
+    for ds in parsed["dimension_scores"]:
+        assert "score" in ds
+        assert isinstance(ds["score"], (int, float))
+        assert "grade" in ds
+
+
+def test_json_dimension_has_checks_skipped():
+    report = _make_report()
+    output = render_json(report)
+    parsed = json.loads(output)
+    sec = [ds for ds in parsed["dimension_scores"] if ds["dimension"] == "security"][0]
+    assert len(sec["checks_skipped"]) == 1
+    assert sec["checks_skipped"][0]["check_id"] == "security.auth-flow"
 
 
 def test_json_roundtrip():
@@ -52,8 +79,9 @@ def test_json_roundtrip():
     report = _make_report()
     output = render_json(report)
     restored = AuditReport.model_validate_json(output)
-    assert restored.overall_grade == report.overall_grade
     assert len(restored.dimension_scores) == len(report.dimension_scores)
+    for ds in restored.dimension_scores:
+        assert isinstance(ds.score, float)
 
 
 def test_html_output():
@@ -64,6 +92,21 @@ def test_html_output():
     assert "CRITICAL" in html
     assert "secret-leakage" in html
     assert "description-bloat" in html
+
+
+def test_html_contains_scores():
+    report = _make_report()
+    html = render_html(report)
+    # Should contain numeric scores
+    for ds in report.dimension_scores:
+        assert f"{ds.score:.0f}" in html
+
+
+def test_html_contains_skipped_checks():
+    report = _make_report()
+    html = render_html(report)
+    assert "security.auth-flow" in html
+    assert "no HTTP traffic" in html
 
 
 def test_sarif_output_valid():

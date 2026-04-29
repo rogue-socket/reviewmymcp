@@ -9,6 +9,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -25,7 +26,8 @@ class ConformanceEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
-        findings.extend(self._check_initialize_handshake(events))
+        skipped: list[SkippedCheck] = []
+        findings.extend(self._check_initialize_handshake(events, skipped))
         findings.extend(self._check_capability_mismatch(events, server_meta))
         findings.extend(self._check_jsonrpc_conformance(events))
         findings.extend(self._check_session_management(events))
@@ -43,17 +45,22 @@ class ConformanceEvaluator:
                 "conformance.notification-correctness",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
-    def _check_initialize_handshake(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_initialize_handshake(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         findings: list[Finding] = []
         sessions: dict[str | None, list[McpEvent]] = defaultdict(list)
         for event in events:
             sessions[event.session_id].append(event)
 
+        small_sessions = 0
         for sid, session_events in sessions.items():
             sorted_events = sorted(session_events, key=lambda e: e.timestamp)
             if not sorted_events:
+                continue
+            if len(sorted_events) <= 2:
+                small_sessions += 1
                 continue
 
             init_request_idx = None
@@ -114,6 +121,11 @@ class ConformanceEvaluator:
                             remediation="Wait for the initialize response before sending notifications/initialized.",
                         )
                     )
+        if small_sessions:
+            skipped.append(SkippedCheck(
+                check_id="conformance.initialize-handshake",
+                reason=f"skipped {small_sessions} session(s) with <= 2 events",
+            ))
         return findings
 
     def _check_capability_mismatch(self, events: list[McpEvent], server_meta: ServerMeta) -> list[Finding]:

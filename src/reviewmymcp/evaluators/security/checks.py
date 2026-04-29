@@ -9,6 +9,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -48,7 +49,8 @@ class SecurityEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
-        findings.extend(self._check_prompt_injection(events))
+        skipped: list[SkippedCheck] = []
+        findings.extend(self._check_prompt_injection(events, config, skipped))
         findings.extend(self._check_secret_leakage(events))
         findings.extend(self._check_auth_flow(events))
         findings.extend(self._check_scope_creep(events, server_meta))
@@ -64,12 +66,16 @@ class SecurityEvaluator:
                 "security.excessive-permissions",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
-    def _check_prompt_injection(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_prompt_injection(
+        self, events: list[McpEvent], config: EvaluatorConfig, skipped: list[SkippedCheck],
+    ) -> list[Finding]:
         findings: list[Finding] = []
         tool_responses = [e for e in events if e.is_response and e.result and not e.is_error]
 
+        regex_flagged_event_ids: set[str] = set()
         for event in tool_responses:
             content = event.result.get("content", []) if event.result else []
             for item in content:
@@ -79,6 +85,7 @@ class SecurityEvaluator:
                 for pattern in INJECTION_PATTERNS:
                     match = pattern.search(text)
                     if match:
+                        regex_flagged_event_ids.add(event.event_id)
                         tool_name = event.method or "unknown"
                         if event.request_event_id:
                             for e in events:
@@ -101,6 +108,49 @@ class SecurityEvaluator:
                             )
                         )
                         break
+
+        # Judge pass: scan non-flagged responses for subtler injection patterns
+        if config.judge is not None:
+            from reviewmymcp.judge.base import JudgeRequest
+            from reviewmymcp.judge.prompts import PROMPT_INJECTION_SYSTEM, PROMPT_INJECTION_USER
+
+            unflagged = [e for e in tool_responses if e.event_id not in regex_flagged_event_ids]
+            for event in unflagged[:50]:
+                content = event.result.get("content", []) if event.result else []
+                text_parts = [item.get("text", "") for item in content
+                              if isinstance(item, dict) and item.get("type") == "text"]
+                full_text = "\n".join(text_parts)
+                if not full_text.strip():
+                    continue
+
+                tool_name = "unknown"
+                if event.request_event_id:
+                    for e in events:
+                        if e.event_id == event.request_event_id and e.params:
+                            tool_name = e.params.get("name", tool_name)
+                            break
+
+                response = config.judge.complete(JudgeRequest(
+                    system=PROMPT_INJECTION_SYSTEM,
+                    user=PROMPT_INJECTION_USER.format(tool_name=tool_name, content=full_text[:2000]),
+                ))
+                if response.parsed is None:
+                    continue
+                risk_score = response.parsed.get("risk_score", 1)
+                if risk_score >= 4:
+                    findings.append(Finding(
+                        check_id="security.prompt-injection-surface",
+                        severity=Severity.CRITICAL if risk_score >= 5 else Severity.HIGH,
+                        title=f"Judge: potential injection in `{tool_name}` output (risk {risk_score}/5)",
+                        description=response.parsed.get("rationale", ""),
+                        evidence={
+                            "risk_score": risk_score,
+                            "suspicious_fragments": response.parsed.get("suspicious_fragments", []),
+                        },
+                        remediation="Sanitize or sandbox tool outputs before returning to model context.",
+                        affected_entity=tool_name,
+                    ))
+
         return findings
 
     def _check_secret_leakage(self, events: list[McpEvent]) -> list[Finding]:

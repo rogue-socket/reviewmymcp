@@ -7,23 +7,20 @@ from pydantic import BaseModel, Field
 from reviewmymcp.evaluators.base import Finding, Severity
 from reviewmymcp.scoring.grader import AuditReport, Grade
 
-
-class FindingDiff(BaseModel):
-    finding: Finding
-    status: str  # "new" | "resolved" | "unchanged"
+GRADE_ORDER = [Grade.A, Grade.B, Grade.C, Grade.D, Grade.F]
 
 
 class DimensionDiff(BaseModel):
     dimension: str
     baseline_grade: Grade
     current_grade: Grade
+    baseline_score: float = 0.0
+    current_score: float = 0.0
     is_regression: bool = False
     is_improvement: bool = False
 
 
 class DiffReport(BaseModel):
-    baseline_grade: Grade
-    current_grade: Grade
     dimension_diffs: list[DimensionDiff] = Field(default_factory=list)
     new_findings: list[Finding] = Field(default_factory=list)
     resolved_findings: list[Finding] = Field(default_factory=list)
@@ -35,9 +32,6 @@ def _finding_key(f: Finding) -> str:
     return f"{f.check_id}::{f.affected_entity}"
 
 
-GRADE_ORDER = [Grade.A, Grade.B, Grade.C, Grade.D, Grade.F]
-
-
 def diff_reports(baseline: AuditReport, current: AuditReport) -> DiffReport:
     baseline_dims = {ds.dimension: ds for ds in baseline.dimension_scores}
     current_dims = {ds.dimension: ds for ds in current.dimension_scores}
@@ -47,11 +41,15 @@ def diff_reports(baseline: AuditReport, current: AuditReport) -> DiffReport:
     for dim in all_dimensions:
         bg = baseline_dims[dim].grade if dim in baseline_dims else Grade.A
         cg = current_dims[dim].grade if dim in current_dims else Grade.A
+        bs = baseline_dims[dim].score if dim in baseline_dims else 100.0
+        cs = current_dims[dim].score if dim in current_dims else 100.0
         dimension_diffs.append(
             DimensionDiff(
                 dimension=dim,
                 baseline_grade=bg,
                 current_grade=cg,
+                baseline_score=bs,
+                current_score=cs,
                 is_regression=GRADE_ORDER.index(cg) > GRADE_ORDER.index(bg),
                 is_improvement=GRADE_ORDER.index(cg) < GRADE_ORDER.index(bg),
             )
@@ -78,8 +76,6 @@ def diff_reports(baseline: AuditReport, current: AuditReport) -> DiffReport:
     has_regressions = any(f.severity in high_or_above for f in new_findings)
 
     return DiffReport(
-        baseline_grade=baseline.overall_grade,
-        current_grade=current.overall_grade,
         dimension_diffs=dimension_diffs,
         new_findings=new_findings,
         resolved_findings=resolved_findings,

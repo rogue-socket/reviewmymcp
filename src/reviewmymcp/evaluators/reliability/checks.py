@@ -9,6 +9,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -23,7 +24,8 @@ class ReliabilityEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
-        findings.extend(self._check_error_rate(events))
+        skipped: list[SkippedCheck] = []
+        findings.extend(self._check_error_rate(events, skipped))
         findings.extend(self._check_timeout_behavior(events))
         findings.extend(self._check_task_lifecycle(events))
         findings.extend(self._check_progress_reporting(events))
@@ -39,9 +41,10 @@ class ReliabilityEvaluator:
                 "reliability.retry-semantics",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
-    def _check_error_rate(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_error_rate(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         findings: list[Finding] = []
         requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
         responses = [e for e in events if e.is_response and e.request_event_id in requests]
@@ -56,8 +59,10 @@ class ReliabilityEvaluator:
             if resp.is_error or (resp.result and resp.result.get("isError")):
                 tool_stats[name]["errors"] += 1
 
+        skipped_tools = 0
         for tool_name, stats in tool_stats.items():
             if stats["total"] < 3:
+                skipped_tools += 1
                 continue
             rate = stats["errors"] / stats["total"]
             if rate > 0.1:
@@ -72,6 +77,11 @@ class ReliabilityEvaluator:
                         affected_entity=tool_name,
                     )
                 )
+        if skipped_tools:
+            skipped.append(SkippedCheck(
+                check_id="reliability.error-rate",
+                reason=f"fewer than 3 calls for {skipped_tools} tool(s)",
+            ))
         return findings
 
     def _check_timeout_behavior(self, events: list[McpEvent]) -> list[Finding]:

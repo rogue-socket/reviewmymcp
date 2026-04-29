@@ -37,8 +37,8 @@ def test_replay_json(sample_stdio_log):
     result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
     assert result.exit_code in (0, 1)
     parsed = json.loads(result.output)
-    assert "overall_grade" in parsed
     assert "dimension_scores" in parsed
+    assert "tool_count" in parsed
 
 
 def test_replay_sarif(sample_stdio_log):
@@ -65,7 +65,7 @@ def test_replay_to_file(sample_stdio_log):
     assert result.exit_code in (0, 1)
     content = Path(path).read_text()
     parsed = json.loads(content)
-    assert "overall_grade" in parsed
+    assert "dimension_scores" in parsed
 
     Path(path).unlink()
 
@@ -90,7 +90,7 @@ def test_diff_command(sample_stdio_log):
 
     result = runner.invoke(cli, ["diff", path1, path2])
     assert result.exit_code == 0  # no regressions
-    assert "Baseline" in result.output
+    assert "accuracy" in result.output
 
     Path(path1).unlink()
     Path(path2).unlink()
@@ -100,6 +100,20 @@ def test_audit_no_target():
     runner = CliRunner()
     result = runner.invoke(cli, ["audit"])
     assert result.exit_code == 2
+
+
+def test_replay_exits_1_with_critical_findings(sample_stdio_log):
+    """With --no-redact, the sample fixture exposes SSN and connection strings -> CRITICAL findings -> exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--no-redact", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+
+def test_audit_exits_1_with_critical_findings(sample_stdio_log):
+    """audit --log-file with --no-redact triggers CRITICAL security findings -> exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--log-file", str(sample_stdio_log), "--no-redact", "--no-llm-judges"])
+    assert result.exit_code == 1
 
 
 from pathlib import Path as _P

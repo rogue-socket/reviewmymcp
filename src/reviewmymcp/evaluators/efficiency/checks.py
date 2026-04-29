@@ -10,6 +10,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -42,6 +43,7 @@ class EfficiencyEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
+        skipped: list[SkippedCheck] = []
         stats: dict[str, object] = {}
         request_map = _build_request_map(events)
 
@@ -50,8 +52,8 @@ class EfficiencyEvaluator:
         stats.update(s)
         findings.extend(self._check_response_bloat(events, request_map, config))
         findings.extend(self._check_redundant_calls(events, config))
-        findings.extend(self._check_latency_cliff(events, request_map, config))
-        findings.extend(self._check_token_cost(events, request_map, config))
+        findings.extend(self._check_latency_cliff(events, request_map, config, skipped))
+        findings.extend(self._check_token_cost(events, request_map, config, skipped))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -63,6 +65,7 @@ class EfficiencyEvaluator:
                 "efficiency.token-cost-per-task",
             ],
             findings=findings,
+            checks_skipped=skipped,
             stats=stats,
         )
 
@@ -182,7 +185,8 @@ class EfficiencyEvaluator:
         return findings
 
     def _check_latency_cliff(
-        self, events: list[McpEvent], request_map: dict[str, McpEvent], config: EvaluatorConfig
+        self, events: list[McpEvent], request_map: dict[str, McpEvent], config: EvaluatorConfig,
+        skipped: list[SkippedCheck],
     ) -> list[Finding]:
         findings: list[Finding] = []
         p99_threshold = config.thresholds.get("latency_cliff_p99_ms", 30000)
@@ -194,8 +198,10 @@ class EfficiencyEvaluator:
                 req = request_map[event.request_event_id]
                 tool_latencies[_tool_name(req)].append(event.latency_ms)
 
+        skipped_tools = 0
         for tool_name, latencies in tool_latencies.items():
             if len(latencies) < 3:
+                skipped_tools += 1
                 continue
             p50 = _percentile(latencies, 50)
             p99 = _percentile(latencies, 99)
@@ -219,10 +225,16 @@ class EfficiencyEvaluator:
                         affected_entity=tool_name,
                     )
                 )
+        if skipped_tools:
+            skipped.append(SkippedCheck(
+                check_id="efficiency.latency-cliff",
+                reason=f"fewer than 3 latency observations for {skipped_tools} tool(s)",
+            ))
         return findings
 
     def _check_token_cost(
-        self, events: list[McpEvent], request_map: dict[str, McpEvent], config: EvaluatorConfig
+        self, events: list[McpEvent], request_map: dict[str, McpEvent], config: EvaluatorConfig,
+        skipped: list[SkippedCheck],
     ) -> list[Finding]:
         findings: list[Finding] = []
         threshold = config.thresholds.get("token_cost_bytes_per_call", 40000)
@@ -262,4 +274,9 @@ class EfficiencyEvaluator:
                         remediation="Reduce tool definition sizes and response payloads to improve cost efficiency.",
                     )
                 )
+        else:
+            skipped.append(SkippedCheck(
+                check_id="efficiency.token-cost-per-task",
+                reason="no successful tool calls recorded",
+            ))
         return findings

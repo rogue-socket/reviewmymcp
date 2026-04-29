@@ -1,12 +1,17 @@
 # reviewmymcp
 
-Log-driven audit and evaluation tool for [MCP (Model Context Protocol)](https://modelcontextprotocol.io) servers. Point it at a server or a log file — get back a graded report with specific findings and remediation guidance.
+Audit and evaluation tool for [MCP (Model Context Protocol)](https://modelcontextprotocol.io) servers. Point it at a server or a log file — get back a graded report with specific findings and remediation guidance.
 
 ## Why
 
 MCP servers are proliferating faster than quality can keep pace. The protocol is well-specified; the implementations are not. Common failure modes — bloated tool descriptions that eat context windows, schemas the model misuses, tools that overlap, latency cliffs, silent auth failures, prompt injection in tool outputs — are invisible without traffic-level analysis.
 
-`reviewmymcp` ingests MCP traffic (captured from production or generated synthetically), runs 42 evaluator checks across 9 dimensions, and produces a graded report.
+`reviewmymcp` provides two complementary audit products:
+
+- **`reviewmymcp audit`** — Log-based audit. Ingests captured MCP JSON-RPC traffic, runs 42 deterministic and LLM-judge checks across 9 dimensions, and produces a graded report with numeric scores (0-100) per dimension.
+- **`reviewmymcp active-audit`** — Active agent-driven usability testing. An LLM agent is placed in front of a live MCP server, given tasks across 6 categories, and its behavioral signals are observed and scored across 5 dimensions.
+
+Both produce independent scored reports. They measure fundamentally different things — protocol quality vs. agent usability.
 
 ## Quick Start
 
@@ -19,8 +24,14 @@ reviewmymcp replay traffic.ndjson
 # Audit a live stdio MCP server (generates synthetic traffic)
 reviewmymcp audit "python -m my_mcp_server"
 
+# Active agent-driven usability testing
+reviewmymcp active-audit "python -m my_mcp_server"
+
 # Capture traffic without evaluating (proxy mode)
 reviewmymcp watch "python -m my_mcp_server"
+
+# Convert logs from other formats to canonical NDJSON
+reviewmymcp convert foreign-logs.json --output-file traffic.ndjson
 
 # Compare two reports for regressions
 reviewmymcp diff baseline.json current.json
@@ -98,17 +109,77 @@ reviewmymcp audit --log-file v2.ndjson --output json --output-file current.json
 reviewmymcp diff baseline.json current.json
 ```
 
+### `reviewmymcp active-audit <TARGET>`
+
+Run agent-driven usability testing against a live MCP server. An LLM agent is given tasks and must use the server's tools to complete them. Behavioral signals (tool found, argument struggle, gave up, chaining failure, etc.) are observed and scored.
+
+```bash
+# Basic active audit
+reviewmymcp active-audit "python -m my_server"
+
+# Use OpenAI as the agent provider
+reviewmymcp active-audit "python -m my_server" --agent-provider openai
+
+# Limit turns and output JSON
+reviewmymcp active-audit "python -m my_server" --max-turns 10 --output json
+
+# Only run specific task categories
+reviewmymcp active-audit "python -m my_server" --categories discovery,single_tool
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--agent-provider` | `anthropic` \| `openai` \| `gemini` (default: anthropic) |
+| `--agent-model` | Override agent model name |
+| `--judge-provider` | Provider for task generation |
+| `--judge-model` | Override judge model name |
+| `--max-turns` | Max agent turns per task (default: 15) |
+| `--output terminal\|json` | Output format |
+| `--output-file PATH` | Write report to file |
+| `--categories LIST` | Comma-separated: discovery, single_tool, multi_step, error_recovery, ambiguous, edge_case |
+
+**Scored dimensions:**
+
+| Dimension | What it measures |
+|-----------|-----------------|
+| Tool Discovery | Can the agent find and correctly identify tools? |
+| Argument Quality | Can the agent construct correct arguments on the first try? |
+| Task Completion | Does the agent complete tasks successfully? |
+| Error Recovery | Can the agent recover from errors? |
+| Multi-step Reasoning | Can the agent chain tools effectively? |
+
+### `reviewmymcp convert <INPUT_FILE>`
+
+Convert MCP logs from various sources to canonical NDJSON format.
+
+```bash
+# Auto-detect and convert (validates existing NDJSON)
+reviewmymcp convert logs.json --output-file traffic.ndjson
+
+# Explicit format
+reviewmymcp convert logs.json --format passthrough
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--format` | `auto` \| `passthrough` \| `claude-desktop` \| `python-sdk` |
+| `--output-file PATH` | Write output to file (default: stdout) |
+
 ### `reviewmymcp list-checks`
 
 Print all available evaluator checks with their dimensions.
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Audit passed (no critical/high findings) |
-| 1 | Audit found high or critical findings |
-| 2 | Audit could not run (bad config, connection failure) |
+| Code | Meaning | Commands |
+|------|---------|----------|
+| 0 | Audit passed (no critical/high findings) | `audit`, `replay`, `diff` |
+| 1 | Critical or high findings found / regressions detected | `audit`, `replay`, `diff` |
+| 2 | Could not run (bad config, missing target, connection failure) | all |
 
 ## Evaluation Dimensions
 
@@ -215,17 +286,36 @@ Measures behavior as concurrent usage scales.
 
 ## Grading
 
-Each dimension gets a letter grade:
+Each dimension gets a **numeric score (0-100)** and a **letter grade**. There is no overall server grade — per-dimension scores are the product. CI gating uses exit codes.
 
-| Grade | Criteria |
-|-------|----------|
-| **A** | No critical or high findings. At most 2 medium. |
-| **B** | No critical. At most 2 high. |
-| **C** | No critical. 3+ high or 5+ medium. |
-| **D** | 1 critical, or 5+ high. |
-| **F** | 2+ critical. |
+### Scoring formula
 
-**Overall grade** = worst dimension grade, with a one-letter uplift if 7+ of 9 dimensions are A/B.
+Deductions are severity-weighted and normalized per dimension:
+
+| Severity | Deduction weight |
+|----------|-----------------|
+| Critical | 25 points |
+| High | 10 points |
+| Medium | 4 points |
+| Low | 1 point |
+| Info | 0 |
+
+Deductions are normalized by a per-dimension denominator — tool count (discoverability, efficiency, accuracy, security), call count (reliability, composability, performance), or raw (conformance, compliance). This means 1 problem across 50 tools has less impact than 1 problem across 3 tools.
+
+### Grade thresholds
+
+| Grade | Score range |
+|-------|------------|
+| **A** | 90-100 |
+| **B** | 75-89 |
+| **C** | 60-74 |
+| **D** | 40-59 |
+| **F** | 0-39 |
+
+### Hard-cap overrides
+
+- **1 critical finding** → dimension capped at **D** regardless of score
+- **2+ critical findings** → dimension forced to **F**
 
 ## Log Format
 
@@ -300,6 +390,16 @@ Create a JSON config file and pass it with `--config`:
     "enabled": true,
     "extra_patterns": ["INTERNAL-\\d{6}"]
   },
+  "scoring": {
+    "severity_weights": {
+      "critical": 25.0,
+      "high": 10.0,
+      "medium": 4.0,
+      "low": 1.0,
+      "info": 0.0
+    },
+    "normalization_multiplier": 4.0
+  },
   "thresholds": {
     "description_bloat_single": 500,
     "description_bloat_total": 5000,
@@ -321,11 +421,12 @@ See [docs/adding-evaluators.md](docs/adding-evaluators.md) for how to write new 
 src/reviewmymcp/
   cli.py                  # Click CLI entry points
   config.py               # Configuration loading
-  ingest/                 # Log ingestion, parsing, normalization, redaction
+  ingest/                 # Log ingestion, parsing, normalization, conversion, redaction
   proxy/                  # Stdio and HTTP transparent proxies
   evaluators/             # 9 dimension subpackages, 42 checks
   scoring/                # Grading engine, report diffing
   reporting/              # Terminal, JSON, HTML, SARIF output
-  synthetic/              # Traffic generation, edge probes, load testing
-  judge/                  # Multi-provider LLM judge abstraction
+  synthetic/              # Traffic generation, edge probes
+  active/                 # Prod2: agent-driven usability testing (agent loop, task generation, scoring)
+  judge/                  # Multi-provider LLM abstraction (judge + agent tool-use)
 ```

@@ -14,6 +14,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -45,8 +46,9 @@ class PerformanceEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
-        findings.extend(self._check_concurrent_session_scaling(events))
-        findings.extend(self._check_throughput_degradation(events))
+        skipped: list[SkippedCheck] = []
+        findings.extend(self._check_concurrent_session_scaling(events, skipped))
+        findings.extend(self._check_throughput_degradation(events, skipped))
         findings.extend(self._check_resource_contention(events))
         findings.extend(self._check_connection_pool(events))
 
@@ -59,9 +61,10 @@ class PerformanceEvaluator:
                 "performance.connection-pool-exhaustion",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
-    def _check_concurrent_session_scaling(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_concurrent_session_scaling(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Compare latency across different concurrency levels."""
         findings: list[Finding] = []
         sessions: dict[str | None, list[McpEvent]] = defaultdict(list)
@@ -69,10 +72,18 @@ class PerformanceEvaluator:
             sessions[event.session_id].append(event)
 
         if len(sessions) < 3:
+            skipped.append(SkippedCheck(
+                check_id="performance.concurrent-session-scaling",
+                reason=f"need >= 3 sessions, only {len(sessions)} found",
+            ))
             return findings
 
         responses = [e for e in events if e.is_response and e.latency_ms is not None and e.method == "tools/call"]
         if len(responses) < 10:
+            skipped.append(SkippedCheck(
+                check_id="performance.concurrent-session-scaling",
+                reason=f"need >= 10 tool/call responses with latency, only {len(responses)} found",
+            ))
             return findings
 
         responses.sort(key=lambda e: e.timestamp)
@@ -116,9 +127,14 @@ class PerformanceEvaluator:
                         remediation="Investigate scaling bottlenecks. Consider connection pooling, async processing, or horizontal scaling.",
                     )
                 )
+        else:
+            skipped.append(SkippedCheck(
+                check_id="performance.concurrent-session-scaling",
+                reason="insufficient low-concurrency or high-concurrency samples (need >= 3 each)",
+            ))
         return findings
 
-    def _check_throughput_degradation(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_throughput_degradation(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check if error rate increases with request rate."""
         findings: list[Finding] = []
         responses = sorted(
@@ -126,6 +142,10 @@ class PerformanceEvaluator:
             key=lambda e: e.timestamp,
         )
         if len(responses) < 20:
+            skipped.append(SkippedCheck(
+                check_id="performance.throughput-degradation",
+                reason=f"need >= 20 tool/call responses, only {len(responses)} found",
+            ))
             return findings
 
         window_size_sec = 10
@@ -150,6 +170,10 @@ class PerformanceEvaluator:
             i = max(i + 1, j)
 
         if len(windows) < 3:
+            skipped.append(SkippedCheck(
+                check_id="performance.throughput-degradation",
+                reason=f"insufficient time windows (need >= 3, got {len(windows)})",
+            ))
             return findings
 
         windows.sort(key=lambda w: w[0])

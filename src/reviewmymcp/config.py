@@ -22,11 +22,25 @@ class RedactionConfig(BaseModel):
     extra_patterns: list[str] = Field(default_factory=list)
 
 
+class ScoringConfig(BaseModel):
+    """Configurable severity weights and normalization multiplier for the grading engine."""
+
+    severity_weights: dict[str, float] = Field(default_factory=lambda: {
+        "critical": 25.0,
+        "high": 10.0,
+        "medium": 4.0,
+        "low": 1.0,
+        "info": 0.0,
+    })
+    normalization_multiplier: float = 4.0
+
+
 class AuditConfig(BaseModel):
     """Top-level configuration for an audit run."""
 
     judge: JudgeConfig = Field(default_factory=JudgeConfig)
     redaction: RedactionConfig = Field(default_factory=RedactionConfig)
+    scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     dimensions: list[str] | None = None
     min_severity: str = "info"
     thresholds: dict[str, Any] = Field(default_factory=dict)

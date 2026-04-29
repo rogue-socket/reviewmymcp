@@ -24,28 +24,42 @@
 <h1>MCP Server Audit Report</h1>
 <div class="meta">
   <p>Server: <strong>{{ report.server_meta.server_name }}</strong> v{{ report.server_meta.server_version }}</p>
-  <p>Protocol: {{ report.server_meta.protocol_version }} | Events: {{ report.total_events }} | Sessions: {{ report.total_sessions }}</p>
+  <p>Protocol: {{ report.server_meta.protocol_version }} | Events: {{ report.total_events }} | Sessions: {{ report.total_sessions }}{% if report.tool_count %} | Tools: {{ report.tool_count }}{% endif %}{% if report.call_count %} | Calls: {{ report.call_count }}{% endif %}</p>
   <p>Date: {{ report.timestamp.strftime('%Y-%m-%d %H:%M UTC') }}</p>
 </div>
 
-<h2>Overall Grade: <span class="grade grade-{{ report.overall_grade.value }}">{{ report.overall_grade.value }}</span></h2>
-
 <h2>Dimension Scores</h2>
 <table>
-  <thead><tr><th>Dimension</th><th>Grade</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
+  <thead><tr><th>Dimension</th><th>Score</th><th>Grade</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Skipped</th></tr></thead>
   <tbody>
   {% for ds in report.dimension_scores|sort(attribute='dimension') %}
   <tr>
     <td>{{ ds.dimension }}</td>
+    <td>{{ '%.0f'|format(ds.score) }}</td>
     <td><span class="grade grade-{{ ds.grade.value }}" style="font-size:1rem;padding:0.1rem 0.4rem;">{{ ds.grade.value }}</span></td>
     <td>{{ ds.critical_count or '-' }}</td>
     <td>{{ ds.high_count or '-' }}</td>
     <td>{{ ds.medium_count or '-' }}</td>
     <td>{{ ds.low_count or '-' }}</td>
+    <td>{{ ds.checks_skipped|length or '-' }}</td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
+
+{% set all_skipped = [] %}
+{% for ds in report.dimension_scores %}{% for sc in ds.checks_skipped %}{% if all_skipped.append((ds.dimension, sc)) %}{% endif %}{% endfor %}{% endfor %}
+{% if all_skipped %}
+<h3>Skipped Checks</h3>
+<table>
+  <thead><tr><th>Check</th><th>Reason</th></tr></thead>
+  <tbody>
+  {% for dim, sc in all_skipped %}
+  <tr><td>{{ sc.check_id }}</td><td>{{ sc.reason }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 
 <h2>Top Findings</h2>
 {% for finding in report.top_findings %}

@@ -23,7 +23,6 @@ def _make_report(dim_findings: dict[str, list[Finding]]):
 def test_diff_no_changes():
     report = _make_report({"efficiency": [_finding("e.x", Severity.MEDIUM)]})
     diff = diff_reports(report, report)
-    assert diff.baseline_grade == diff.current_grade
     assert len(diff.new_findings) == 0
     assert len(diff.resolved_findings) == 0
     assert diff.has_regressions is False
@@ -73,3 +72,12 @@ def test_diff_dimension_improvement():
     diff = diff_reports(baseline, current)
     sec_diff = next(d for d in diff.dimension_diffs if d.dimension == "security")
     assert sec_diff.is_improvement is True
+
+
+def test_diff_has_scores():
+    baseline = _make_report({"efficiency": [_finding("e.x", Severity.HIGH)]})
+    current = _make_report({"efficiency": []})
+    diff = diff_reports(baseline, current)
+    eff_diff = next(d for d in diff.dimension_diffs if d.dimension == "efficiency")
+    assert eff_diff.baseline_score < 100.0
+    assert eff_diff.current_score == 100.0

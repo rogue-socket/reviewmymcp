@@ -10,6 +10,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -24,10 +25,11 @@ class ComposabilityEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
+        skipped: list[SkippedCheck] = []
         findings.extend(self._check_error_recovery(events))
-        findings.extend(self._check_idempotency(events))
+        findings.extend(self._check_idempotency(events, skipped))
         findings.extend(self._check_chained_calls(events))
-        findings.extend(self._check_concurrency(events))
+        findings.extend(self._check_concurrency(events, skipped))
         findings.extend(self._check_programmatic_readiness(events))
 
         return EvaluatorResult(
@@ -40,6 +42,7 @@ class ComposabilityEvaluator:
                 "composability.programmatic-readiness",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
     def _check_error_recovery(self, events: list[McpEvent]) -> list[Finding]:
@@ -95,7 +98,7 @@ class ComposabilityEvaluator:
             )
         return findings
 
-    def _check_idempotency(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_idempotency(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check if repeated identical calls produce different results."""
         findings: list[Finding] = []
         requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
@@ -112,11 +115,14 @@ class ComposabilityEvaluator:
             )
             call_results[key].append({"result": resp.result, "is_error": resp.is_error})
 
+        skipped_groups = 0
         for key, results in call_results.items():
             if len(results) < 2:
+                skipped_groups += 1
                 continue
             success_results = [r["result"] for r in results if not r["is_error"] and r["result"]]
             if len(success_results) < 2:
+                skipped_groups += 1
                 continue
             structures = [json.dumps(sorted(r.keys()) if isinstance(r, dict) else r) for r in success_results]
             unique = set(structures)
@@ -137,6 +143,11 @@ class ComposabilityEvaluator:
                         affected_entity=call_info.get("name", ""),
                     )
                 )
+        if skipped_groups:
+            skipped.append(SkippedCheck(
+                check_id="composability.idempotency-violation",
+                reason=f"fewer than 2 repeated call groups with 2+ successes ({skipped_groups} group(s) skipped)",
+            ))
         return findings
 
     def _check_chained_calls(self, events: list[McpEvent]) -> list[Finding]:
@@ -196,7 +207,7 @@ class ComposabilityEvaluator:
                         break
         return findings
 
-    def _check_concurrency(self, events: list[McpEvent]) -> list[Finding]:
+    def _check_concurrency(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check error rate difference between concurrent and sequential calls."""
         findings: list[Finding] = []
         requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
@@ -208,8 +219,10 @@ class ComposabilityEvaluator:
             if resp and req.params:
                 tool_calls[req.params.get("name", "")].append((req, resp))
 
+        skipped_tools = 0
         for tool_name, pairs in tool_calls.items():
             if len(pairs) < 5:
+                skipped_tools += 1
                 continue
             pairs.sort(key=lambda p: p[0].timestamp)
             concurrent_errors = 0
@@ -255,6 +268,13 @@ class ComposabilityEvaluator:
                             affected_entity=tool_name,
                         )
                     )
+            else:
+                skipped_tools += 1
+        if skipped_tools:
+            skipped.append(SkippedCheck(
+                check_id="composability.concurrency-safety",
+                reason=f"skipped {skipped_tools} tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each",
+            ))
         return findings
 
     def _check_programmatic_readiness(self, events: list[McpEvent]) -> list[Finding]:

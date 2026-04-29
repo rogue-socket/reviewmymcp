@@ -10,6 +10,7 @@ from reviewmymcp.evaluators.base import (
     EvaluatorResult,
     Finding,
     Severity,
+    SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
@@ -71,12 +72,13 @@ class DiscoverabilityEvaluator:
         config: EvaluatorConfig,
     ) -> EvaluatorResult:
         findings: list[Finding] = []
+        skipped: list[SkippedCheck] = []
         findings.extend(self._check_name_quality(server_meta))
         findings.extend(self._check_missing_examples(server_meta))
         findings.extend(self._check_enum_undocumented(events, server_meta))
         findings.extend(self._check_rest_wrapper_smell(server_meta))
-        # description-clarity: LLM judge — placeholder
-        # semantic-overlap: LLM judge — placeholder
+        findings.extend(self._check_description_clarity(server_meta, config, skipped))
+        findings.extend(self._check_semantic_overlap(server_meta, config, skipped))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -89,6 +91,7 @@ class DiscoverabilityEvaluator:
                 "discoverability.semantic-overlap",
             ],
             findings=findings,
+            checks_skipped=skipped,
         )
 
     def _check_name_quality(self, server_meta: ServerMeta) -> list[Finding]:
@@ -219,6 +222,115 @@ class DiscoverabilityEvaluator:
                             affected_entity=tool_name,
                         )
                     )
+        return findings
+
+    def _check_description_clarity(
+        self,
+        server_meta: ServerMeta,
+        config: EvaluatorConfig,
+        skipped: list[SkippedCheck],
+    ) -> list[Finding]:
+        if config.judge is None:
+            skipped.append(SkippedCheck(
+                check_id="discoverability.description-clarity",
+                reason="LLM judge not enabled",
+            ))
+            return []
+
+        import json as _json
+
+        from reviewmymcp.judge.base import JudgeRequest
+        from reviewmymcp.judge.prompts import DESCRIPTION_CLARITY_SYSTEM, DESCRIPTION_CLARITY_USER
+
+        findings: list[Finding] = []
+        for tool in server_meta.tools:
+            user_prompt = DESCRIPTION_CLARITY_USER.format(
+                name=tool.name,
+                description=tool.description,
+                schema=_json.dumps(tool.input_schema, indent=2),
+            )
+            response = config.judge.complete(JudgeRequest(
+                system=DESCRIPTION_CLARITY_SYSTEM,
+                user=user_prompt,
+            ))
+            if response.parsed is None:
+                skipped.append(SkippedCheck(
+                    check_id="discoverability.description-clarity",
+                    reason=f"judge call failed for tool '{tool.name}'",
+                ))
+                continue
+            score = response.parsed.get("score", 5)
+            if score <= 2:
+                findings.append(Finding(
+                    check_id="discoverability.description-clarity",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool.name}` has unclear description (score {score}/5)",
+                    description=response.parsed.get("rationale", ""),
+                    evidence={
+                        "score": score,
+                        "specific_issues": response.parsed.get("specific_issues", []),
+                    },
+                    remediation="Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+                    affected_entity=tool.name,
+                ))
+        return findings
+
+    def _check_semantic_overlap(
+        self,
+        server_meta: ServerMeta,
+        config: EvaluatorConfig,
+        skipped: list[SkippedCheck],
+    ) -> list[Finding]:
+        if config.judge is None:
+            skipped.append(SkippedCheck(
+                check_id="discoverability.semantic-overlap",
+                reason="LLM judge not enabled",
+            ))
+            return []
+
+        tools = server_meta.tools
+        if len(tools) < 2:
+            skipped.append(SkippedCheck(
+                check_id="discoverability.semantic-overlap",
+                reason="fewer than 2 tools to compare",
+            ))
+            return []
+
+        from itertools import combinations
+
+        from reviewmymcp.judge.base import JudgeRequest
+        from reviewmymcp.judge.prompts import SEMANTIC_OVERLAP_SYSTEM, SEMANTIC_OVERLAP_USER
+
+        findings: list[Finding] = []
+        pairs = list(combinations(tools, 2))[:20]
+
+        for tool_a, tool_b in pairs:
+            user_prompt = SEMANTIC_OVERLAP_USER.format(
+                name_a=tool_a.name, description_a=tool_a.description,
+                name_b=tool_b.name, description_b=tool_b.description,
+            )
+            response = config.judge.complete(JudgeRequest(
+                system=SEMANTIC_OVERLAP_SYSTEM,
+                user=user_prompt,
+            ))
+            if response.parsed is None:
+                continue
+            score = response.parsed.get("overlap_score", 1)
+            if score >= 4:
+                severity = Severity.HIGH if score == 5 else Severity.MEDIUM
+                findings.append(Finding(
+                    check_id="discoverability.semantic-overlap",
+                    severity=severity,
+                    title=f"Tools `{tool_a.name}` and `{tool_b.name}` overlap (score {score}/5)",
+                    description=response.parsed.get("rationale", ""),
+                    evidence={
+                        "overlap_score": score,
+                        "shared_functionality": response.parsed.get("shared_functionality", ""),
+                        "differentiators": response.parsed.get("differentiators", ""),
+                    },
+                    remediation="Merge overlapping tools or add clear differentiation in descriptions.",
+                    affected_entity=f"{tool_a.name}, {tool_b.name}",
+                ))
         return findings
 
     def _check_rest_wrapper_smell(self, server_meta: ServerMeta) -> list[Finding]:
