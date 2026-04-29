@@ -51,6 +51,25 @@ class MyEvaluator:
         )
 ```
 
+## EvaluatorResult Fields
+
+```python
+EvaluatorResult(
+    dimension="my_dimension",
+    checks_run=["my_dimension.check-name"],  # IDs of checks that ran
+    findings=findings,                        # list[Finding]
+    checks_skipped=[                          # Checks that couldn't run
+        SkippedCheck(
+            check_id="my_dimension.another-check",
+            reason="Requires concurrent sessions but none found",
+        )
+    ],
+    stats={"tools_analyzed": 5},              # Optional stats for reporting
+)
+```
+
+Use `checks_skipped` when a check requires data that isn't present (e.g., concurrent sessions, task-based operations). Import `SkippedCheck` from `evaluators.base`.
+
 ## Finding Structure
 
 Each check produces zero or more `Finding` objects:
@@ -269,12 +288,22 @@ def test_my_check():
 
 ## Severity Guidelines
 
-| Severity | When to use |
-|----------|-------------|
-| **CRITICAL** | Security vulnerabilities, data loss, protocol violations that break clients |
-| **HIGH** | Significant quality issues that directly impact model performance or reliability |
-| **MEDIUM** | Quality issues that degrade experience but don't break functionality |
-| **LOW** | Stylistic or minor issues, opportunities for improvement |
-| **INFO** | Informational observations, no action needed |
+| Severity | Deduction weight | When to use |
+|----------|-----------------|-------------|
+| **CRITICAL** | 25 points | Security vulnerabilities, data loss, protocol violations that break clients |
+| **HIGH** | 10 points | Significant quality issues that directly impact model performance or reliability |
+| **MEDIUM** | 4 points | Quality issues that degrade experience but don't break functionality |
+| **LOW** | 1 point | Stylistic or minor issues, opportunities for improvement |
+| **INFO** | 0 points | Informational observations, no action needed |
 
 Each check should justify its severity with a real failure mode it catches. Avoid CRITICAL for anything that isn't a security or correctness issue.
+
+### How severity affects scoring
+
+Each dimension gets a numeric score (0-100). Deductions are severity-weighted and normalized:
+
+- **Tool-normalized** dimensions (discoverability, efficiency, accuracy, security): deductions divided by tool count
+- **Call-normalized** dimensions (reliability, composability, performance): deductions divided by call count
+- **Raw** dimensions (conformance, compliance): deductions applied directly
+
+Hard-cap overrides ensure critical findings dominate: 1 critical caps the dimension at grade D, 2+ criticals force grade F regardless of score.
