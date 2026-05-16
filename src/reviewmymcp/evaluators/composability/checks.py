@@ -49,12 +49,14 @@ class ComposabilityEvaluator:
         """Check if error responses give enough info for recovery."""
         findings: list[Finding] = []
         error_responses = [
-            e for e in events if e.is_response and (e.is_error or (e.result and e.result.get("isError")))
+            e for e in events
+            if e.is_response and not e.is_probe and (e.is_error or (e.result and e.result.get("isError")))
         ]
         if not error_responses:
             return findings
 
         ambiguous = 0
+        ambiguous_examples: list[str] = []
         for event in error_responses:
             text = ""
             if event.error:
@@ -84,15 +86,23 @@ class ComposabilityEvaluator:
             )
             if is_ambiguous:
                 ambiguous += 1
+                if text and text not in ambiguous_examples and len(ambiguous_examples) < 3:
+                    ambiguous_examples.append(text)
 
         if error_responses and ambiguous / len(error_responses) > 0.5:
+            total = len(error_responses)
+            pct = ambiguous * 100 // total
             findings.append(
                 Finding(
                     check_id="composability.error-recovery-surface",
                     severity=Severity.HIGH,
-                    title="Majority of errors are ambiguous",
-                    description=f"{ambiguous} of {len(error_responses)} error responses ({ambiguous * 100 // len(error_responses)}%) do not indicate whether the error is retryable or what went wrong.",
-                    evidence={"ambiguous_count": ambiguous, "total_errors": len(error_responses)},
+                    title=f"{ambiguous}/{total} error responses ({pct}%) are ambiguous",
+                    description=f"{ambiguous} of {total} error responses ({pct}%) do not indicate whether the error is retryable or what went wrong.",
+                    evidence={
+                        "ambiguous_count": ambiguous,
+                        "total_errors": total,
+                        "examples": ambiguous_examples,
+                    },
                     remediation="Include retryability hints and specific failure reasons in error responses.",
                 )
             )
@@ -101,7 +111,11 @@ class ComposabilityEvaluator:
     def _check_idempotency(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check if repeated identical calls produce different results."""
         findings: list[Finding] = []
-        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
+        requests = {
+            e.event_id: e
+            for e in events
+            if e.is_request and e.method == "tools/call" and not e.is_probe
+        }
         responses = [e for e in events if e.is_response and e.request_event_id in requests]
 
         call_results: dict[str, list[dict]] = defaultdict(list)
@@ -154,7 +168,7 @@ class ComposabilityEvaluator:
         """Check if tool outputs can be used as inputs to subsequent tools."""
         findings: list[Finding] = []
         requests = sorted(
-            [e for e in events if e.is_request and e.method == "tools/call"],
+            [e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe],
             key=lambda e: e.timestamp,
         )
         responses = {e.request_event_id: e for e in events if e.is_response}
@@ -210,7 +224,11 @@ class ComposabilityEvaluator:
     def _check_concurrency(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check error rate difference between concurrent and sequential calls."""
         findings: list[Finding] = []
-        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
+        requests = {
+            e.event_id: e
+            for e in events
+            if e.is_request and e.method == "tools/call" and not e.is_probe
+        }
         responses = {e.request_event_id: e for e in events if e.is_response and e.request_event_id in requests}
 
         tool_calls: dict[str, list[tuple[McpEvent, McpEvent]]] = defaultdict(list)
@@ -280,7 +298,11 @@ class ComposabilityEvaluator:
     def _check_programmatic_readiness(self, events: list[McpEvent]) -> list[Finding]:
         """Check if tool outputs are structured for programmatic use."""
         findings: list[Finding] = []
-        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
+        requests = {
+            e.event_id: e
+            for e in events
+            if e.is_request and e.method == "tools/call" and not e.is_probe
+        }
         responses = [e for e in events if e.is_response and e.request_event_id in requests and not e.is_error]
 
         tool_outputs: dict[str, list[str]] = defaultdict(list)
