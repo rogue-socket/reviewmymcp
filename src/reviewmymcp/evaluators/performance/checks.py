@@ -67,6 +67,8 @@ class PerformanceEvaluator:
     def _check_concurrent_session_scaling(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Compare latency across different concurrency levels."""
         findings: list[Finding] = []
+        # Keep concurrent_burst probes — they're the intended signal for this check.
+        events = [e for e in events if not (e.is_probe and e.probe_type != "concurrent_burst")]
         sessions: dict[str | None, list[McpEvent]] = defaultdict(list)
         for event in events:
             sessions[event.session_id].append(event)
@@ -138,7 +140,7 @@ class PerformanceEvaluator:
         """Check if error rate increases with request rate."""
         findings: list[Finding] = []
         responses = sorted(
-            [e for e in events if e.is_response and e.method == "tools/call"],
+            [e for e in events if e.is_response and e.method == "tools/call" and not e.is_probe],
             key=lambda e: e.timestamp,
         )
         if len(responses) < 20:
@@ -204,7 +206,11 @@ class PerformanceEvaluator:
     def _check_resource_contention(self, events: list[McpEvent]) -> list[Finding]:
         """Check if certain tools slow down when other tools are running."""
         findings: list[Finding] = []
-        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
+        requests = {
+            e.event_id: e
+            for e in events
+            if e.is_request and e.method == "tools/call" and not e.is_probe
+        }
         responses = [e for e in events if e.is_response and e.request_event_id in requests and e.latency_ms]
 
         tool_latencies_solo: dict[str, list[float]] = defaultdict(list)

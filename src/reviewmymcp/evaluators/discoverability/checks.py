@@ -183,7 +183,7 @@ class DiscoverabilityEvaluator:
 
         observed_values: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
         for event in events:
-            if event.is_request and event.method == "tools/call" and event.params:
+            if event.is_request and event.method == "tools/call" and event.params and not event.is_probe:
                 name = event.params.get("name", "")
                 args = event.params.get("arguments", {})
                 if isinstance(args, dict):
@@ -203,7 +203,7 @@ class DiscoverabilityEvaluator:
                 call_count = sum(
                     1
                     for e in events
-                    if e.is_request and e.method == "tools/call" and e.params and e.params.get("name") == tool_name
+                    if e.is_request and e.method == "tools/call" and e.params and e.params.get("name") == tool_name and not e.is_probe
                 )
                 if call_count >= 10 and len(values) <= 5:
                     findings.append(

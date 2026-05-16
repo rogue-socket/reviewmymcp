@@ -28,11 +28,13 @@ def _parse_direction(raw: Any) -> Direction:
 
 def _unwrap_record(
     raw: dict[str, Any],
-) -> tuple[dict[str, Any], Direction, datetime | None, str | None]:
-    """Unwrap optional wrapper objects to extract the JSON-RPC message, direction, timestamp, session."""
+) -> tuple[dict[str, Any], Direction, datetime | None, str | None, bool, str | None]:
+    """Unwrap optional wrapper objects to extract the JSON-RPC message, direction, timestamp, session, probe flags."""
     direction = Direction.CLIENT_TO_SERVER
     timestamp = None
     session_id = None
+    is_probe = bool(raw.get("is_probe", False))
+    probe_type = raw.get("probe_type") if is_probe else None
 
     if "direction" in raw:
         direction = _parse_direction(raw["direction"])
@@ -49,11 +51,11 @@ def _unwrap_record(
         session_id = raw.get("session_id")
 
     if "message" in raw and isinstance(raw["message"], dict):
-        return raw["message"], direction, timestamp, session_id
+        return raw["message"], direction, timestamp, session_id, is_probe, probe_type
     if "jsonrpc" in raw:
-        return raw, direction, timestamp, session_id
+        return raw, direction, timestamp, session_id, is_probe, probe_type
 
-    return raw, direction, timestamp, session_id
+    return raw, direction, timestamp, session_id, is_probe, probe_type
 
 
 def load_file(
@@ -85,7 +87,7 @@ def load_file(
         if not isinstance(raw_record, dict):
             continue
 
-        message, direction, timestamp, session_id = _unwrap_record(raw_record)
+        message, direction, timestamp, session_id, is_probe, probe_type = _unwrap_record(raw_record)
 
         if redact:
             message, redacted_fields = redact_dict(message, extra_patterns=extra_redaction_patterns)
@@ -100,6 +102,8 @@ def load_file(
             timestamp=timestamp,
         )
         event.redacted_fields = redacted_fields
+        event.is_probe = is_probe
+        event.probe_type = probe_type
         events.append(event)
 
     return events

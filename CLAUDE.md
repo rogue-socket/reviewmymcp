@@ -117,6 +117,29 @@ pytest                         # run all tests
 pytest tests/test_evaluators/  # run evaluator tests only
 ```
 
+## Branches & Worktrees
+
+| Branch | Worktree | Purpose |
+|--------|----------|---------|
+| `main` | `~/Documents/reviewmymcp` | Root. Contains `DECISIONS.md` (design decisions from review session). |
+| `rogue-socket/mcp-audit-plan` | `rio-de-janeiro` | **Main codebase.** Prod1 (log-based audit) + Prod2 (active agent-driven testing) merged here. |
+| `rogue-socket/active-mcp-checker` | `curitiba` | **Prod2 prototype.** Earlier standalone active checker (text-prompt agent mode). Has `runs/REPORT.md` with empirical results from 4 real MCP servers. |
+| `rogue-socket/mcp-log-collector` | `harare` | Dev utility for capturing NDJSON from real servers. Not user-facing. |
+
+### Key docs across branches
+
+| Doc | Branch | What it is |
+|-----|--------|------------|
+| `DECISIONS.md` | `main` | Design decisions — two products, numeric scoring, per-dimension denominators, no overall grade, native tool-use, deferred items. Source of truth for "why." |
+| `README.md` | `mcp-audit-plan` | User-facing docs — all 7 CLI commands, 42 checks, scoring formula, CI integration, config. |
+| `PLAN.md` | `mcp-audit-plan` | Original PRD/design doc — problem framing, milestone breakdown, evaluator specs. |
+| `CHANGELOG-scoring-rewrite.md` | `mcp-audit-plan` | What changed in the scoring rewrite and why. |
+| `TESTING.md` | `mcp-audit-plan` | Manual testing guide — 10 sections, copy-paste commands, evaluation checklist. |
+| `docs/log-format.md` | `mcp-audit-plan` | Log format spec — NDJSON/JSON, wrapper fields, McpEvent schema, PII redaction. |
+| `docs/adding-evaluators.md` | `mcp-audit-plan` | Contributor guide — how to write new evaluator checks. |
+| `runs/REPORT.md` | `active-mcp-checker` | Comparative test report — active checker results against filesystem, GitHub, puppeteer, web-search servers (Gemini 2.5 Flash). Includes the GitHub PAT incident. |
+| `README.md` | `active-mcp-checker` | Prod2 prototype docs — architecture diagram, pipeline, behavioral signals. Diverged from rio-de-janeiro (text-prompt vs native tool-use). |
+
 ## Implementation Status
 
-All nine evaluator dimensions, ingestion (file loader + redactor + normalizer + correlator), proxies (stdio + http), scoring (grader + differ), reporting (terminal/json/html/sarif), synthetic traffic, multi-provider judges, and the full CLI surface are scaffolded with accompanying tests under `tests/`. See `PLAN.md` for the full design and milestone breakdown.
+All nine evaluator dimensions, ingestion (file loader + redactor + normalizer + correlator + converter), proxies (stdio + http), scoring (grader + differ), reporting (terminal/json/html/sarif), synthetic traffic, multi-provider judges, active audit module (agent loop + task generator + signal extractor + scorer), and the full CLI surface (7 commands) are implemented with 267 tests under `tests/`. See `PLAN.md` for the full design and milestone breakdown.

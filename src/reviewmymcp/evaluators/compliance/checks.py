@@ -85,6 +85,8 @@ class ComplianceEvaluator:
         requests: dict[tuple, McpEvent] = {}
         responses: set[tuple] = set()
         for event in events:
+            if event.is_probe:
+                continue
             key = (event.session_id, event.jsonrpc_id)
             if event.is_request and event.jsonrpc_id is not None:
                 requests[key] = event

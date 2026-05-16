@@ -24,7 +24,7 @@ def _percentile(values: list[float], p: float) -> float:
 
 
 def _build_request_map(events: list[McpEvent]) -> dict[str, McpEvent]:
-    return {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
+    return {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
 
 
 def _tool_name(request: McpEvent) -> str:
@@ -147,7 +147,7 @@ class EfficiencyEvaluator:
         findings: list[Finding] = []
         sessions: dict[str | None, list[McpEvent]] = defaultdict(list)
         for event in events:
-            if event.is_request and event.method == "tools/call":
+            if event.is_request and event.method == "tools/call" and not event.is_probe:
                 sessions[event.session_id].append(event)
 
         for sid, reqs in sessions.items():
@@ -241,6 +241,8 @@ class EfficiencyEvaluator:
 
         sessions: dict[str | None, dict] = defaultdict(lambda: {"bytes": 0, "successes": 0})
         for event in events:
+            if event.is_probe:
+                continue
             sessions[event.session_id]["bytes"] += event.raw_size_bytes
             if (
                 event.is_response

@@ -46,8 +46,15 @@ class ReliabilityEvaluator:
 
     def _check_error_rate(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         findings: list[Finding] = []
-        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call"}
-        responses = [e for e in events if e.is_response and e.request_event_id in requests]
+        requests = {
+            e.event_id: e
+            for e in events
+            if e.is_request and e.method == "tools/call" and not e.is_probe
+        }
+        responses = [
+            e for e in events
+            if e.is_response and e.request_event_id in requests and not e.is_probe
+        ]
 
         tool_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"total": 0, "errors": 0})
         for resp in responses:
@@ -237,10 +244,10 @@ class ReliabilityEvaluator:
         import json
 
         requests = sorted(
-            [e for e in events if e.is_request and e.method == "tools/call"],
+            [e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe],
             key=lambda e: e.timestamp,
         )
-        responses = {e.request_event_id: e for e in events if e.is_response}
+        responses = {e.request_event_id: e for e in events if e.is_response and not e.is_probe}
 
         call_groups: dict[str, list[tuple[McpEvent, McpEvent | None]]] = defaultdict(list)
         for req in requests:

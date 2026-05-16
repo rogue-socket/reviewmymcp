@@ -146,6 +146,8 @@ class AccuracyEvaluator:
         tool_outputs: dict[str, list[list[str]]] = defaultdict(list)
 
         for event in events:
+            if event.is_probe:
+                continue
             if not (event.is_response and event.request_event_id in req_map and _is_success(event)):
                 continue
             req = req_map[event.request_event_id]
@@ -260,7 +262,7 @@ class AccuracyEvaluator:
         findings: list[Finding] = []
         for tool in server_meta.tools:
             tool_calls = [(eid, req) for eid, req in req_map.items()
-                          if req.params and req.params.get("name") == tool.name]
+                          if req.params and req.params.get("name") == tool.name and not req.is_probe]
             if not tool_calls:
                 continue
 
@@ -331,7 +333,7 @@ class AccuracyEvaluator:
         tool_errors: dict[str, list[str]] = defaultdict(list)
 
         for event in events:
-            if not event.is_response:
+            if not event.is_response or event.is_probe:
                 continue
             is_err = event.is_error or (event.result and event.result.get("isError"))
             if not is_err:

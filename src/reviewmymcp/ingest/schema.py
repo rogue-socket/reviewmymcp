@@ -53,6 +53,9 @@ class McpEvent(BaseModel):
     redacted_fields: list[str] = Field(default_factory=list)
     raw_message: dict[str, Any] | None = None
 
+    is_probe: bool = False
+    probe_type: str | None = None
+
 
 class ToolDefinition(BaseModel):
     """A single tool from tools/list response."""

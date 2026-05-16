@@ -25,6 +25,9 @@ def correlate(events: list[McpEvent]) -> list[McpEvent]:
                 delta = (event.timestamp - request.timestamp).total_seconds() * 1000
                 if delta >= 0:
                     event.latency_ms = delta
+                if request.is_probe and not event.is_probe:
+                    event.is_probe = True
+                    event.probe_type = request.probe_type
 
         _extract_task_id(event)
 

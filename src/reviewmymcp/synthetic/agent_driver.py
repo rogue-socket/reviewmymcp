@@ -31,6 +31,8 @@ class StdioAgentDriver:
         self._request_id = 0
         self._session_id = str(uuid4())
         self._pending: dict[int, asyncio.Future] = {}
+        self._probe_context: str | None = None
+        self._probe_rids: dict[int | str, str] = {}
 
     @property
     def events(self) -> list[McpEvent]:
@@ -102,14 +104,18 @@ class StdioAgentDriver:
         results = []
 
         for probe in probes:
-            req = probe["request"]
-            method = req.get("method")
-            params = req.get("params", {})
+            self._probe_context = probe["probe_type"]
+            try:
+                req = probe["request"]
+                method = req.get("method")
+                params = req.get("params", {})
 
-            if method == "tools/call":
-                result = await self.call_tool(params.get("name", ""), params.get("arguments", {}))
-            else:
-                result = await self._send_raw(req)
+                if method == "tools/call":
+                    result = await self.call_tool(params.get("name", ""), params.get("arguments", {}))
+                else:
+                    result = await self._send_raw(req)
+            finally:
+                self._probe_context = None
 
             results.append(
                 {
@@ -209,6 +215,18 @@ class StdioAgentDriver:
         else:
             redacted_fields = []
 
+        rid = raw.get("id")
+        is_probe = False
+        probe_type: str | None = None
+        if direction == Direction.CLIENT_TO_SERVER and self._probe_context is not None:
+            is_probe = True
+            probe_type = self._probe_context
+            if rid is not None:
+                self._probe_rids[rid] = probe_type
+        elif direction == Direction.SERVER_TO_CLIENT and rid is not None and rid in self._probe_rids:
+            is_probe = True
+            probe_type = self._probe_rids.pop(rid)
+
         event = normalize_event(
             raw=raw,
             transport=Transport.STDIO,
@@ -217,4 +235,6 @@ class StdioAgentDriver:
             timestamp=datetime.now(UTC),
         )
         event.redacted_fields = redacted_fields
+        event.is_probe = is_probe
+        event.probe_type = probe_type
         self._events.append(event)

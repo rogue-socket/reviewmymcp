@@ -50,6 +50,8 @@ def make_event(
     http_headers: dict | None = None,
     event_id: str | None = None,
     task_id: str | None = None,
+    is_probe: bool = False,
+    probe_type: str | None = None,
 ) -> McpEvent:
     return McpEvent(
         event_id=event_id or _next_id(),
@@ -72,6 +74,8 @@ def make_event(
         raw_message=raw_message,
         http_headers=http_headers,
         task_id=task_id,
+        is_probe=is_probe,
+        probe_type=probe_type,
     )
 
 
@@ -84,6 +88,8 @@ def make_tool_call_pair(
     session_id: str = "test-session",
     base_time: datetime | None = None,
     request_id: int = 1,
+    is_probe: bool = False,
+    probe_type: str | None = None,
 ) -> tuple[McpEvent, McpEvent]:
     base = base_time or datetime.now(UTC)
     req_eid = str(uuid4())
@@ -96,6 +102,8 @@ def make_tool_call_pair(
         jsonrpc_id=request_id,
         session_id=session_id,
         timestamp=base,
+        is_probe=is_probe,
+        probe_type=probe_type,
     )
 
     if result_content is None:
@@ -113,6 +121,8 @@ def make_tool_call_pair(
         latency_ms=latency_ms,
         request_event_id=req_eid,
         direction=Direction.SERVER_TO_CLIENT,
+        is_probe=is_probe,
+        probe_type=probe_type,
     )
 
     return req, resp

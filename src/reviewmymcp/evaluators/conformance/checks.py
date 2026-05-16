@@ -173,6 +173,8 @@ class ConformanceEvaluator:
             raw = event.raw_message
             if not raw:
                 continue
+            if event.is_probe and not event.is_response:
+                continue
 
             if raw.get("jsonrpc") != "2.0":
                 issues.append(
