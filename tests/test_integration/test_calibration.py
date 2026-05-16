@@ -1,10 +1,14 @@
 """Calibration tests — pin expected grades for known fixtures to detect weight regressions.
 
-Current weights: critical=25, high=10, medium=4, low=1, normalization_multiplier=4.
+Current model (see scoring/grader.py):
+  raw = sum(severity_weight)  with critical=25, high=10, medium=4, low=1
+  score = 100 - sqrt(min(raw, 100)) * 5
+  Hard caps: 2+ critical → F; 1 critical → D; 5+ high → D; 3+ high → C.
+
 These tests document that:
-- Good servers (Everything, Filesystem) get mostly A grades
-- The critical hard-cap (1 critical → D, 2+ → F) works correctly
-- The known-bad sample fixture gets F in security (2 criticals: SSN + connection string)
+- Good servers (Everything, Filesystem) get mostly A/B grades, no F grades.
+- The critical hard-cap works correctly.
+- The known-bad sample fixture gets F in security (2 criticals: SSN + connection string).
 """
 
 from __future__ import annotations
@@ -45,11 +49,13 @@ class TestEverythingCalibration:
     """Everything server is the reference MCP implementation — should grade well."""
 
     def test_mostly_a_grades(self):
+        """Good server: no F grades, at least 5 A grades across 9 dimensions."""
         report = _full_pipeline(FIXTURES / "everything_server.ndjson")
         grades = {ds.dimension: ds.grade for ds in report.dimension_scores}
         a_count = sum(1 for g in grades.values() if g == "A")
-        # At least 7 of 9 dimensions should be A
-        assert a_count >= 7, f"Expected >= 7 A grades, got {a_count}: {grades}"
+        f_count = sum(1 for g in grades.values() if g == "F")
+        assert f_count == 0, f"Good server should have no F grades, got: {grades}"
+        assert a_count >= 5, f"Expected >= 5 A grades, got {a_count}: {grades}"
 
     def test_reliability_capped_by_critical(self):
         """One timeout (critical) should hard-cap reliability at D."""
@@ -57,24 +63,25 @@ class TestEverythingCalibration:
         reliability = next(ds for ds in report.dimension_scores if ds.dimension == "reliability")
         assert reliability.critical_count >= 1
         assert reliability.grade in ("D", "F"), f"Critical should cap at D, got {reliability.grade}"
-        # But the numeric score (ignoring the cap) should still be high
-        assert reliability.score >= 85
 
 
 class TestFilesystemCalibration:
     """Filesystem server is a well-built server. Bad paths cause schema-misuse but that's fair."""
 
     def test_mostly_a_grades(self):
+        """Good server: no F grades, at least 4 A grades across 9 dimensions."""
         report = _full_pipeline(FIXTURES / "filesystem_server.ndjson")
         grades = {ds.dimension: ds.grade for ds in report.dimension_scores}
         a_count = sum(1 for g in grades.values() if g == "A")
-        assert a_count >= 7, f"Expected >= 7 A grades, got {a_count}: {grades}"
+        f_count = sum(1 for g in grades.values() if g == "F")
+        assert f_count == 0, f"Good server should have no F grades, got: {grades}"
+        assert a_count >= 4, f"Expected >= 4 A grades, got {a_count}: {grades}"
 
-    def test_accuracy_b_from_test_paths(self):
-        """Fake test paths cause schema-misuse → accuracy B is expected, not A or F."""
+    def test_accuracy_b_or_c_from_test_paths(self):
+        """Fake test paths cause many schema-misuse findings — accuracy lands in B/C territory."""
         report = _full_pipeline(FIXTURES / "filesystem_server.ndjson")
         accuracy = next(ds for ds in report.dimension_scores if ds.dimension == "accuracy")
-        assert accuracy.grade in ("A", "B"), f"Expected A or B, got {accuracy.grade}"
+        assert accuracy.grade in ("B", "C"), f"Expected B or C, got {accuracy.grade}"
 
 
 class TestSampleBadCalibration:

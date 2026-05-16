@@ -1,7 +1,15 @@
 """Tests for the grading engine."""
 
+import math
+
 from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity, SkippedCheck
-from reviewmymcp.scoring.grader import Grade, grade_results, _score_dimension, _grade_from_score
+from reviewmymcp.scoring.grader import (
+    Grade,
+    SCORE_CURVE_FACTOR,
+    _grade_from_score,
+    _score_dimension,
+    grade_results,
+)
 
 from tests.conftest import make_server_meta
 
@@ -25,86 +33,73 @@ def _result(dimension: str, findings: list[Finding], skipped: list[SkippedCheck]
     )
 
 
+def _expected(raw: float) -> float:
+    return round(max(0.0, 100.0 - math.sqrt(min(raw, 100.0)) * SCORE_CURVE_FACTOR), 1)
+
+
 # --- Numeric score computation ---
 
 
 class TestScoreDimension:
     def test_no_findings_scores_100(self):
-        assert _score_dimension([], None, 0, 0) == 100.0
+        assert _score_dimension([]) == 100.0
 
-    def test_raw_dimension_deducts_directly(self):
-        findings = [_finding("c.x", Severity.HIGH)]  # 10 points
-        score = _score_dimension(findings, None, 0, 0)
-        assert score == 90.0
+    def test_single_high(self):
+        # raw = 10 → 100 - sqrt(10)*5 ≈ 84.2
+        score = _score_dimension([_finding("d.x", Severity.HIGH)])
+        assert score == _expected(10)
+        assert score > 80 and score < 90
 
-    def test_raw_dimension_critical_deducts_25(self):
-        findings = [_finding("c.x", Severity.CRITICAL)]
-        score = _score_dimension(findings, None, 0, 0)
+    def test_single_critical(self):
+        # raw = 25 → 100 - sqrt(25)*5 = 75
+        score = _score_dimension([_finding("s.x", Severity.CRITICAL)])
         assert score == 75.0
 
-    def test_raw_dimension_floors_at_zero(self):
-        findings = [_finding(f"c.{i}", Severity.CRITICAL) for i in range(5)]
-        score = _score_dimension(findings, None, 0, 0)
-        assert score == 0.0
+    def test_five_highs(self):
+        # raw = 50 → 100 - sqrt(50)*5 ≈ 64.6
+        score = _score_dimension([_finding(f"r.{i}", Severity.HIGH) for i in range(5)])
+        assert score == _expected(50)
+        assert 60 < score < 70
 
-    def test_tools_normalized_single_finding_many_tools(self):
-        # 1 high finding across 10 tools: per_unit = 10/10 = 1, score = 100 - 4 = 96
+    def test_five_mediums(self):
+        # raw = 20 → 100 - sqrt(20)*5 ≈ 77.6 (B)
+        score = _score_dimension([_finding(f"e.{i}", Severity.MEDIUM) for i in range(5)])
+        assert score == _expected(20)
+        assert score > 75
+
+    def test_many_low_severity_findings_dont_crater(self):
+        # 24 MEDIUM + 3 LOW → raw = 99 → ~50 (not 1, which is what linear would give)
+        findings = [_finding(f"d.m{i}", Severity.MEDIUM) for i in range(24)]
+        findings += [_finding(f"d.l{i}", Severity.LOW) for i in range(3)]
+        score = _score_dimension(findings)
+        assert 45 < score < 55
+
+    def test_raw_deduction_cap_floors_score(self):
+        # Many criticals: raw is capped at 100, score = 100 - sqrt(100)*5 = 50
+        findings = [_finding(f"c.{i}", Severity.CRITICAL) for i in range(10)]
+        assert _score_dimension(findings) == 50.0
+
+    def test_score_does_not_depend_on_tool_or_call_count(self):
         findings = [_finding("d.x", Severity.HIGH)]
-        score = _score_dimension(findings, "tools", tool_count=10, call_count=0)
-        assert score == 96.0
-
-    def test_tools_normalized_single_finding_few_tools(self):
-        # 1 high finding across 2 tools: per_unit = 10/2 = 5, score = 100 - 20 = 80
-        findings = [_finding("d.x", Severity.HIGH)]
-        score = _score_dimension(findings, "tools", tool_count=2, call_count=0)
-        assert score == 80.0
-
-    def test_calls_normalized(self):
-        # 1 medium finding across 20 calls: per_unit = 4/20 = 0.2, score = 100 - 0.8 = 99.2
-        findings = [_finding("r.x", Severity.MEDIUM)]
-        score = _score_dimension(findings, "calls", tool_count=0, call_count=20)
-        assert score == 99.2
-
-    def test_zero_denominator_falls_back_to_raw(self):
-        findings = [_finding("d.x", Severity.HIGH)]
-        score = _score_dimension(findings, "tools", tool_count=0, call_count=0)
-        assert score == 90.0  # raw fallback: 100 - 10
-
-    def test_medium_findings_with_normalization(self):
-        # 3 medium findings across 5 tools: raw = 12, per_unit = 2.4, score = 100 - 9.6 = 90.4
-        findings = [_finding(f"d.{i}", Severity.MEDIUM) for i in range(3)]
-        score = _score_dimension(findings, "tools", tool_count=5, call_count=0)
-        assert score == 90.4
+        # Same findings → same score regardless of surface area
+        assert _score_dimension(findings) == _score_dimension(findings)
 
 
-# --- Grade from score with hard gates ---
+# --- Grade from score with hard caps ---
 
 
 class TestGradeFromScore:
-    def test_score_95_is_A(self):
+    def test_score_thresholds(self):
         assert _grade_from_score(95.0, []) == Grade.A
-
-    def test_score_90_is_A(self):
         assert _grade_from_score(90.0, []) == Grade.A
-
-    def test_score_89_is_B(self):
         assert _grade_from_score(89.0, []) == Grade.B
-
-    def test_score_75_is_B(self):
         assert _grade_from_score(75.0, []) == Grade.B
-
-    def test_score_60_is_C(self):
         assert _grade_from_score(60.0, []) == Grade.C
-
-    def test_score_40_is_D(self):
         assert _grade_from_score(40.0, []) == Grade.D
-
-    def test_score_39_is_F(self):
         assert _grade_from_score(39.0, []) == Grade.F
 
     def test_one_critical_caps_at_D(self):
         findings = [_finding("s.x", Severity.CRITICAL)]
-        # Even with a high score, one critical caps at D
         assert _grade_from_score(95.0, findings) == Grade.D
 
     def test_two_criticals_forces_F(self):
@@ -112,8 +107,22 @@ class TestGradeFromScore:
         assert _grade_from_score(95.0, findings) == Grade.F
 
     def test_one_critical_with_low_score_stays_at_worst(self):
+        # Score yields F; critical caps at D — F is worse, so F wins.
         findings = [_finding("s.x", Severity.CRITICAL)]
-        # Score yields F, critical caps at D — F is worse, so F wins
+        assert _grade_from_score(30.0, findings) == Grade.F
+
+    def test_three_highs_caps_at_C(self):
+        findings = [_finding(f"r.{i}", Severity.HIGH) for i in range(3)]
+        # Even with an A-range score, 3 HIGHs cap at C
+        assert _grade_from_score(95.0, findings) == Grade.C
+
+    def test_five_highs_caps_at_D(self):
+        findings = [_finding(f"r.{i}", Severity.HIGH) for i in range(5)]
+        assert _grade_from_score(95.0, findings) == Grade.D
+
+    def test_high_cap_does_not_improve_grade(self):
+        # 5 HIGHs cap at D, but a worse score (F) wins.
+        findings = [_finding(f"r.{i}", Severity.HIGH) for i in range(5)]
         assert _grade_from_score(30.0, findings) == Grade.F
 
 
@@ -143,31 +152,12 @@ class TestGradeResults:
         report = grade_results(results, make_server_meta())
         assert report.dimension_scores[0].grade == Grade.F
 
-    def test_normalization_with_tool_count(self):
-        # 1 high finding in discoverability with 50 tools should score high
+    def test_score_independent_of_surface_area(self):
+        # Same single HIGH finding on a 2-tool server vs a 50-tool server: same score.
         findings = [_finding("d.x", Severity.HIGH)]
-        results = [_result("discoverability", findings)]
-        report = grade_results(results, make_server_meta(), tool_count=50)
-        ds = report.dimension_scores[0]
-        assert ds.score > 95  # per_unit = 10/50 = 0.2, score = 100 - 0.8 = 99.2
-        assert ds.grade == Grade.A
-
-    def test_normalization_with_few_tools(self):
-        # Same finding with only 2 tools should score lower
-        findings = [_finding("d.x", Severity.HIGH)]
-        results = [_result("discoverability", findings)]
-        report = grade_results(results, make_server_meta(), tool_count=2)
-        ds = report.dimension_scores[0]
-        assert ds.score == 80.0  # per_unit = 10/2 = 5, score = 100 - 20 = 80
-        assert ds.grade == Grade.B
-
-    def test_conformance_uses_raw_scoring(self):
-        # Conformance has no normalization denominator
-        findings = [_finding("c.x", Severity.HIGH)]
-        results = [_result("conformance", findings)]
-        report = grade_results(results, make_server_meta(), tool_count=100)
-        ds = report.dimension_scores[0]
-        assert ds.score == 90.0  # raw: 100 - 10, ignores tool_count
+        r_small = grade_results([_result("discoverability", findings)], make_server_meta(), tool_count=2)
+        r_large = grade_results([_result("discoverability", findings)], make_server_meta(), tool_count=50)
+        assert r_small.dimension_scores[0].score == r_large.dimension_scores[0].score
 
     def test_no_overall_grade(self):
         results = [_result("efficiency", [])]
@@ -205,13 +195,6 @@ class TestGradeResults:
         assert len(ds.checks_skipped) == 1
         assert ds.checks_skipped[0].check_id == "perf.concurrent"
 
-    def test_denominator_info_on_dimension_score(self):
-        results = [_result("discoverability", [])]
-        report = grade_results(results, make_server_meta(), tool_count=15)
-        ds = report.dimension_scores[0]
-        assert ds.denominator_type == "tools"
-        assert ds.denominator_value == 15
-
     def test_multiple_dimensions(self):
         results = [
             _result("efficiency", [_finding("e.x", Severity.MEDIUM)]),
@@ -222,4 +205,6 @@ class TestGradeResults:
         scores = {ds.dimension: ds for ds in report.dimension_scores}
         assert scores["conformance"].grade == Grade.A
         assert scores["security"].grade == Grade.D  # 1 critical caps at D
-        assert scores["efficiency"].score > 95  # 1 medium across 10 tools
+        # 1 medium → raw=4 → ~90
+        assert scores["efficiency"].score == _expected(4)
+        assert scores["efficiency"].grade == Grade.A

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from enum import StrEnum
 
@@ -21,7 +22,6 @@ class Grade(StrEnum):
 
 GRADE_ORDER = [Grade.A, Grade.B, Grade.C, Grade.D, Grade.F]
 
-# Severity deduction weights — points deducted per finding before normalization.
 SEVERITY_WEIGHT: dict[Severity, float] = {
     Severity.CRITICAL: 25.0,
     Severity.HIGH: 10.0,
@@ -30,19 +30,11 @@ SEVERITY_WEIGHT: dict[Severity, float] = {
     Severity.INFO: 0.0,
 }
 
-# How each dimension normalizes its deductions.
-# "tools" -> divide by tool_count, "calls" -> divide by call_count, None -> raw.
-DIMENSION_DENOMINATOR: dict[str, str | None] = {
-    "discoverability": "tools",
-    "efficiency": "tools",
-    "accuracy": "tools",
-    "security": "tools",
-    "reliability": "calls",
-    "composability": "calls",
-    "performance": "calls",
-    "conformance": None,
-    "compliance": None,
-}
+# Square-root softens the deduction curve: doubling findings doesn't double impact.
+# Tuned so 5 HIGH (raw=50) → ~65 (D after the 5+ HIGH hard cap),
+# 5 MEDIUM (raw=20) → ~78 (B), 24 MEDIUM (raw=99) → ~50 (D).
+SCORE_CURVE_FACTOR = 5.0
+RAW_DEDUCTION_CAP = 100.0
 
 
 class DimensionScore(BaseModel):
@@ -56,8 +48,6 @@ class DimensionScore(BaseModel):
     info_count: int = 0
     findings: list[Finding] = Field(default_factory=list)
     checks_skipped: list[SkippedCheck] = Field(default_factory=list)
-    denominator_type: str | None = None
-    denominator_value: int = 0
 
 
 class AuditReport(BaseModel):
@@ -83,55 +73,43 @@ def _raw_deduction(findings: list[Finding]) -> float:
     return sum(SEVERITY_WEIGHT[f.severity] for f in findings)
 
 
-def _score_dimension(
-    findings: list[Finding],
-    denominator_type: str | None,
-    tool_count: int,
-    call_count: int,
-) -> float:
-    """Compute a 0-100 numeric score for a dimension.
+def _score_dimension(findings: list[Finding]) -> float:
+    """Compute a 0-100 numeric score from severity-weighted deductions.
 
-    For normalized dimensions (tools/calls), deductions are per-unit:
-      score = max(0, 100 - (raw_deduction / denominator) * 100 / scale_factor)
-    The scale_factor controls how harsh the scoring is. With scale_factor=25,
-    a raw deduction equal to the denominator produces a score of 0.
-
-    For raw dimensions (conformance, compliance), deductions are absolute:
-      score = max(0, 100 - raw_deduction)
+    Raw deductions are softened with a square root so high finding counts
+    don't crater the score linearly. Raw is capped at 100 before the curve.
     """
     raw = _raw_deduction(findings)
     if raw == 0:
         return 100.0
-
-    if denominator_type == "tools" and tool_count > 0:
-        per_unit = raw / tool_count
-        # Scale: per_unit of 25 (one critical per tool) → score 0
-        score = max(0.0, 100.0 - per_unit * 4.0)
-    elif denominator_type == "calls" and call_count > 0:
-        per_unit = raw / call_count
-        score = max(0.0, 100.0 - per_unit * 4.0)
-    else:
-        # Raw: no normalization. 100 points of deductions → 0 score.
-        score = max(0.0, 100.0 - raw)
-
+    capped = min(raw, RAW_DEDUCTION_CAP)
+    score = max(0.0, 100.0 - math.sqrt(capped) * SCORE_CURVE_FACTOR)
     return round(score, 1)
 
 
 def _grade_from_score(score: float, findings: list[Finding]) -> Grade:
-    """Derive letter grade from numeric score, with hard gate overrides for criticals."""
+    """Derive letter grade from numeric score, with hard caps for severe findings."""
     counts = _count_by_severity(findings)
-    c = counts[Severity.CRITICAL]
+    crit = counts[Severity.CRITICAL]
+    high = counts[Severity.HIGH]
 
-    # Hard gates: criticals override the score-based grade.
-    if c >= 2:
+    score_grade = _score_to_letter(score)
+
+    # Hard caps escalate from the score-based grade (never improve it).
+    cap: Grade | None = None
+    if crit >= 2:
         return Grade.F
-    if c == 1:
-        # Cap at D regardless of score.
-        score_grade = _score_to_letter(score)
-        idx = max(GRADE_ORDER.index(score_grade), GRADE_ORDER.index(Grade.D))
-        return GRADE_ORDER[idx]
+    if crit == 1:
+        cap = Grade.D
+    elif high >= 5:
+        cap = Grade.D
+    elif high >= 3:
+        cap = Grade.C
 
-    return _score_to_letter(score)
+    if cap is None:
+        return score_grade
+    idx = max(GRADE_ORDER.index(score_grade), GRADE_ORDER.index(cap))
+    return GRADE_ORDER[idx]
 
 
 def _score_to_letter(score: float) -> Grade:
@@ -169,15 +147,8 @@ def grade_results(
 
     for result in results:
         counts = _count_by_severity(result.findings)
-        denom_type = DIMENSION_DENOMINATOR.get(result.dimension)
-        score = _score_dimension(result.findings, denom_type, tool_count, call_count)
+        score = _score_dimension(result.findings)
         grade = _grade_from_score(score, result.findings)
-
-        denom_value = 0
-        if denom_type == "tools":
-            denom_value = tool_count
-        elif denom_type == "calls":
-            denom_value = call_count
 
         dimension_scores.append(
             DimensionScore(
@@ -191,8 +162,6 @@ def grade_results(
                 info_count=counts[Severity.INFO],
                 findings=result.findings,
                 checks_skipped=result.checks_skipped,
-                denominator_type=denom_type,
-                denominator_value=denom_value,
             )
         )
 
