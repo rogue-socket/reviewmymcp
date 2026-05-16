@@ -307,6 +307,24 @@ def list_checks() -> None:
 )
 @click.option("--output-file", type=click.Path(), default=None)
 @click.option("--categories", type=str, default=None, help="Comma-separated task categories")
+@click.option(
+    "--readonly",
+    is_flag=True,
+    default=False,
+    help="Filter mutating tools out of the agent's toolset. Recommended for credentialed live servers.",
+)
+@click.option(
+    "--allow-mutations",
+    is_flag=True,
+    default=False,
+    help="Allow the agent to call mutating tools. Use only against throwaway/test accounts.",
+)
+@click.option(
+    "--trace-file",
+    type=click.Path(),
+    default=None,
+    help="Write per-turn JSONL trace of agent actions to this path.",
+)
 def active_audit(
     target: str,
     agent_provider: str,
@@ -317,6 +335,9 @@ def active_audit(
     output_format: str,
     output_file: str | None,
     categories: str | None,
+    readonly: bool,
+    allow_mutations: bool,
+    trace_file: str | None,
 ) -> None:
     """Run active agent-driven usability testing against a live MCP server."""
     import asyncio
@@ -325,6 +346,7 @@ def active_audit(
         _run_active_audit(
             target, agent_provider, agent_model, judge_provider, judge_model,
             max_turns, output_format, output_file, categories,
+            readonly, allow_mutations, trace_file,
         )
     )
 
@@ -339,10 +361,14 @@ async def _run_active_audit(
     output_format: str,
     output_file: str | None,
     categories_str: str | None,
+    readonly: bool,
+    allow_mutations: bool,
+    trace_file: str | None,
 ) -> None:
     """Async implementation of active-audit."""
     from reviewmymcp.active.agent_loop import AgentLoop
     from reviewmymcp.active.models import TaskCategory
+    from reviewmymcp.active.safety import classify_mutators, filter_readonly, write_trace
     from reviewmymcp.active.scorer import score_executions
     from reviewmymcp.active.task_generator import TaskGenerator
     from reviewmymcp.ingest.normalizer import extract_server_meta
@@ -350,6 +376,10 @@ async def _run_active_audit(
     from reviewmymcp.synthetic.agent_driver import StdioAgentDriver
 
     console = Console()
+
+    if readonly and allow_mutations:
+        click.echo("Error: --readonly and --allow-mutations are mutually exclusive.", err=True)
+        sys.exit(2)
 
     # Parse categories
     if categories_str:
@@ -390,7 +420,36 @@ async def _run_active_audit(
                     )
                 )
 
-        console.print(f"[dim]Found {len(tools)} tools. Generating tasks...[/dim]", highlight=False)
+        console.print(f"[dim]Found {len(tools)} tools.[/dim]", highlight=False)
+
+        mutators = classify_mutators(tools)
+        if mutators:
+            if not readonly and not allow_mutations:
+                lines = "\n".join(f"  - {n}" for n in mutators)
+                click.echo(
+                    f"Error: {len(mutators)} tool(s) match write-verb prefixes "
+                    f"(potentially mutating):\n{lines}\n\n"
+                    "Re-run with --readonly (filter them out of the agent's toolset) "
+                    "or --allow-mutations (proceed; target MUST be a throwaway/test "
+                    "account — credentialed live runs can create, delete, or "
+                    "overwrite real assets).",
+                    err=True,
+                )
+                sys.exit(2)
+            if readonly:
+                tools = filter_readonly(tools)
+                console.print(
+                    f"[dim]--readonly: dropped {len(mutators)} mutating tool(s), {len(tools)} remain.[/dim]",
+                    highlight=False,
+                )
+            else:
+                console.print(
+                    f"[yellow]WARNING: --allow-mutations enabled with {len(mutators)} "
+                    "mutating tool(s). Target must be a throwaway/test account.[/yellow]",
+                    highlight=False,
+                )
+
+        console.print("[dim]Generating tasks...[/dim]", highlight=False)
 
         # Generate tasks
         generator = TaskGenerator(judge_provider=judge_instance)
@@ -416,6 +475,10 @@ async def _run_active_audit(
         report = score_executions(executions, server_meta)
 
         console.print(f"[dim]Completed {len(executions)} tasks in {report.total_turns} turns.[/dim]", highlight=False)
+
+        if trace_file:
+            write_trace(executions, Path(trace_file))
+            console.print(f"[dim]Trace written to {trace_file}[/dim]", highlight=False)
 
         # Output
         _output_active_report(report, output_format, output_file, console)
