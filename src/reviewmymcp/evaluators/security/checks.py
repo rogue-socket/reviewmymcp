@@ -23,7 +23,7 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "connection_string",
         re.compile(r"(?:postgres|mysql|mongodb|redis)://[^\s\"']+:[^\s\"']+@[^\s\"']+"),
     ),
-    ("password_in_url", re.compile(r"://[^:]+:[^@]+@")),
+    ("password_in_url", re.compile(r"://[^\s\"'/:@]+:[^\s\"'/@]+@")),
     ("private_key", re.compile(r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----")),
 ]
 

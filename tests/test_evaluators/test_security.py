@@ -61,6 +61,23 @@ def test_secret_leakage_aws_key():
     assert len(leaks) >= 1
 
 
+def test_secret_leakage_no_false_positive_on_url_with_later_at_mention():
+    payload = (
+        '{"url": "https://api.github.com/repos/foo/bar", '
+        '"author": "@octocat", "body": "ping @alice"}'
+    )
+    req, resp = make_tool_call_pair(
+        "search_repositories",
+        {},
+        result_content=[{"type": "text", "text": payload}],
+        request_id=1,
+    )
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([req, resp], make_server_meta(), EvaluatorConfig())
+    leaks = [f for f in result.findings if f.check_id == "security.secret-leakage"]
+    assert leaks == []
+
+
 def test_scope_creep_sampling_without_capability():
     meta = make_server_meta()
     meta.client_capabilities = ClientCapabilities(sampling=False)
