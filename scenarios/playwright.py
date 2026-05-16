@@ -17,7 +17,7 @@ SCENARIOS = [
     },
     {
         "name": "multi_step_interaction",
-        "description": "Navigate, snapshot, click, snapshot — composability chain",
+        "description": "Navigate two pages, snapshot each — composability chain",
         "steps": [
             {
                 "tool": "browser_navigate",
@@ -28,8 +28,8 @@ SCENARIOS = [
                 "arguments": {},
             },
             {
-                "tool": "browser_click",
-                "arguments": {"element": "More information...", "ref": "a"},
+                "tool": "browser_navigate",
+                "arguments": {"url": "https://www.iana.org/domains/reserved"},
             },
             {
                 "tool": "browser_snapshot",
@@ -78,19 +78,15 @@ SCENARIOS = [
         ],
     },
     {
-        "name": "browser_tabs",
-        "description": "Open new tab, navigate, list tabs — tab lifecycle",
+        "name": "screenshot_capture",
+        "description": "Navigate and take a screenshot — binary content response",
         "steps": [
             {
                 "tool": "browser_navigate",
                 "arguments": {"url": "https://example.com"},
             },
             {
-                "tool": "browser_tab_new",
-                "arguments": {"url": "https://httpbin.org/get"},
-            },
-            {
-                "tool": "browser_tab_list",
+                "tool": "browser_take_screenshot",
                 "arguments": {},
             },
         ],

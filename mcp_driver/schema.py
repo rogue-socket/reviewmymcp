@@ -40,6 +40,9 @@ class McpEvent:
     raw_size_bytes: int = 0
     raw_message: dict[str, Any] | None = None
 
+    is_probe: bool = False
+    probe_type: str | None = None
+
     def to_ndjson_dict(self) -> dict[str, Any]:
         """Produce the NDJSON wrapper dict the review tool expects."""
         base = dict(self.raw_message) if self.raw_message else {}
@@ -47,6 +50,10 @@ class McpEvent:
         base["timestamp"] = self.timestamp.isoformat()
         if self.session_id:
             base["session_id"] = self.session_id
+        if self.is_probe:
+            base["is_probe"] = True
+            if self.probe_type:
+                base["probe_type"] = self.probe_type
         return base
 
     def to_ndjson_line(self) -> str:

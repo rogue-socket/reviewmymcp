@@ -61,7 +61,7 @@ def build_server_configs(output_dir: Path, skip: set[str]) -> list[ServerConfig]
 
     # --- Filesystem server ---
     if "filesystem" not in skip:
-        fs_tmpdir = tempfile.mkdtemp(prefix="mcp_fs_")
+        fs_tmpdir = os.path.realpath(tempfile.mkdtemp(prefix="mcp_fs_"))
 
         configs.append(
             ServerConfig(
@@ -89,6 +89,7 @@ def build_server_configs(output_dir: Path, skip: set[str]) -> list[ServerConfig]
                     scenarios=github.SCENARIOS,
                     output_file=output_dir / "github.ndjson",
                     env={"GITHUB_PERSONAL_ACCESS_TOKEN": gh_token},
+                    concurrent_burst=False,
                 )
             )
 
@@ -222,18 +223,22 @@ async def run_concurrent_burst(
             await driver.start()
             await run_handshake(driver)
 
-            for i in range(calls_per_session):
-                tool = tools[i % len(tools)]
-                props = tool.input_schema.get("properties", {})
-                required = tool.input_schema.get("required", [])
-                args = {r: _default_value(props.get(r, {})) for r in required}
-                try:
-                    await asyncio.wait_for(
-                        driver.call_tool(tool.name, args),
-                        timeout=15,
-                    )
-                except (TimeoutError, Exception):
-                    pass
+            driver._probe_context = "concurrent_burst"
+            try:
+                for i in range(calls_per_session):
+                    tool = tools[i % len(tools)]
+                    props = tool.input_schema.get("properties", {})
+                    required = tool.input_schema.get("required", [])
+                    args = {r: _default_value(props.get(r, {})) for r in required}
+                    try:
+                        await asyncio.wait_for(
+                            driver.call_tool(tool.name, args),
+                            timeout=15,
+                        )
+                    except (TimeoutError, Exception):
+                        pass
+            finally:
+                driver._probe_context = None
 
             return driver.events
         finally:

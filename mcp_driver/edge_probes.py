@@ -7,10 +7,23 @@ from typing import Any
 from .schema import ToolDefinition
 
 
+_MAX_TOOLS_FOR_PER_TOOL_PROBES = 3
+
+_WRITE_PREFIXES = ("create_", "push_", "update_", "delete_", "merge_", "fork_", "add_", "write_", "move_", "edit_")
+
+
+def _is_read_only(tool: ToolDefinition) -> bool:
+    return not tool.name.startswith(_WRITE_PREFIXES)
+
+
 def generate_edge_probes(tools: list[ToolDefinition]) -> list[dict[str, Any]]:
     probes: list[dict[str, Any]] = []
 
-    for tool in tools:
+    # Prefer read-only tools for per-tool probes; fall back to any tools if needed.
+    # Cap at _MAX_TOOLS_FOR_PER_TOOL_PROBES so edge noise doesn't swamp scenario traffic.
+    read_tools = [t for t in tools if _is_read_only(t)]
+    sample = (read_tools or tools)[:_MAX_TOOLS_FOR_PER_TOOL_PROBES]
+    for tool in sample:
         probes.extend(_missing_required_args(tool))
         probes.extend(_wrong_type_args(tool))
         probes.extend(_empty_args(tool))
