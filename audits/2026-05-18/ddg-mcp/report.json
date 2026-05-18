@@ -1,0 +1,468 @@
+{
+  "server_meta": {
+    "server_name": "duckduckgo-search",
+    "server_version": "1.0.0",
+    "protocol_version": "2025-11-25",
+    "instructions": "",
+    "server_capabilities": {
+      "logging": false,
+      "prompts": false,
+      "prompts_list_changed": false,
+      "resources": false,
+      "resources_subscribe": false,
+      "resources_list_changed": false,
+      "tools": true,
+      "tools_list_changed": false,
+      "tasks": false,
+      "tasks_list": false,
+      "tasks_cancel": false,
+      "raw": {
+        "tools": {}
+      }
+    },
+    "client_capabilities": {
+      "roots": true,
+      "sampling": true,
+      "elicitation_form": false,
+      "elicitation_url": false,
+      "tasks": false,
+      "raw": {
+        "roots": {
+          "listChanged": true
+        },
+        "sampling": {}
+      }
+    },
+    "tools": [
+      {
+        "name": "search",
+        "description": "在DuckDuckGo上搜索并返回格式化结果",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "搜索查询词"
+            },
+            "max_results": {
+              "type": "number",
+              "description": "返回的最大结果数（默认: 10）",
+              "default": 10
+            },
+            "region": {
+              "type": "string",
+              "description": "地区/语言代码（可选，留空使用默认）。示例: us-en (美国), cn-zh (中国), jp-ja (日本)",
+              "default": ""
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "annotations": {},
+        "execution": {}
+      },
+      {
+        "name": "fetch_content",
+        "description": "从URL获取并解析网页内容",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "要获取内容的网页URL"
+            },
+            "max_length": {
+              "type": "number",
+              "description": "返回内容的最大字符数（默认: 8000）",
+              "default": 8000
+            }
+          },
+          "required": [
+            "url"
+          ]
+        },
+        "annotations": {},
+        "execution": {}
+      }
+    ]
+  },
+  "dimension_scores": [
+    {
+      "dimension": "efficiency",
+      "score": 84.2,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "efficiency.response-payload-bloat",
+          "severity": "high",
+          "title": "Tool `fetch_content` response p95 is 24144 bytes (~6036 tokens)",
+          "description": "Responses are too large. p95=24144B across 4 calls.",
+          "evidence": {
+            "tool": "fetch_content",
+            "p95_bytes": 24144,
+            "call_count": 4
+          },
+          "remediation": "Return summaries by default, paginate large results, or use resources instead.",
+          "affected_entity": "fetch_content"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "accuracy",
+      "score": 68.4,
+      "grade": "C",
+      "critical_count": 0,
+      "high_count": 4,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "high",
+          "title": "Tool `search`: 4 schema-invalid calls accepted",
+          "description": "Server accepted 4 of 10 calls that violated the declared input schema.",
+          "evidence": {
+            "tool": "search",
+            "invalid_accepted": 4,
+            "valid_rejected": 0,
+            "total": 10
+          },
+          "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+          "affected_entity": "search"
+        },
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "high",
+          "title": "Tool `fetch_content`: 4 schema-invalid calls accepted",
+          "description": "Server accepted 4 of 9 calls that violated the declared input schema.",
+          "evidence": {
+            "tool": "fetch_content",
+            "invalid_accepted": 4,
+            "valid_rejected": 0,
+            "total": 9
+          },
+          "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+          "affected_entity": "fetch_content"
+        },
+        {
+          "check_id": "accuracy.argument-validation-gap",
+          "severity": "high",
+          "title": "Tool `search` accepted 3 calls with missing required arguments",
+          "description": "Server is not validating required fields, accepting incomplete input.",
+          "evidence": {
+            "tool": "search",
+            "gap_count": 3
+          },
+          "remediation": "Validate all required arguments and return an error when they are missing.",
+          "affected_entity": "search"
+        },
+        {
+          "check_id": "accuracy.argument-validation-gap",
+          "severity": "high",
+          "title": "Tool `fetch_content` accepted 3 calls with missing required arguments",
+          "description": "Server is not validating required fields, accepting incomplete input.",
+          "evidence": {
+            "tool": "fetch_content",
+            "gap_count": 3
+          },
+          "remediation": "Validate all required arguments and return an error when they are missing.",
+          "affected_entity": "fetch_content"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "discoverability",
+      "score": 85.9,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 2,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "discoverability.description-clarity",
+          "severity": "medium",
+          "title": "Tool `search` has unclear description (score 2/5)",
+          "description": "The description and parameter docs are written in Chinese, which limits accessibility for agents/users operating in other languages. While the schema itself is structurally clear (query, max_results, region with examples), the top-level description is extremely terse ('Search on DuckDuckGo and return formatted results') and omits key information: what 'formatted results' means (fields returned, structure), when to use this vs. other search tools, rate limits or constraints, valid region code format/list, and behavior when no results are found. The generic name 'search' also risks collision with other search tools without disambiguation.",
+          "evidence": {
+            "score": 2,
+            "specific_issues": [
+              "Description and parameter descriptions are in Chinese only — not localized for an English-language agent context",
+              "Tool name 'search' is generic; doesn't signal it's DuckDuckGo-specific without reading the description",
+              "No description of the result format/shape (what fields come back per result)",
+              "No 'when to use' guidance vs. other web search tools (e.g., WebSearch, WebFetch)",
+              "No mention of constraints: rate limits, max value for max_results, safe-search behavior, freshness",
+              "Region parameter gives a few examples but no link/reference to the full list of valid codes",
+              "No mention of error behavior (empty results, network failure, blocked queries)"
+            ]
+          },
+          "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+          "affected_entity": "search"
+        },
+        {
+          "check_id": "discoverability.description-clarity",
+          "severity": "medium",
+          "title": "Tool `fetch_content` has unclear description (score 2/5)",
+          "description": "The description is written in Chinese ('Fetch and parse web page content from URL') and is extremely brief. While the basic function is conveyable, it lacks crucial information: when to use it vs alternatives, what format the parsed content returns in (HTML stripped? Markdown? plain text?), what happens on failure, whether JavaScript is rendered, authentication support, or rate limits. The parameter descriptions are also in Chinese, which may cause issues for English-operating agents. The max_length default of 8000 is documented but units (characters) are only clear from the Chinese description.",
+          "evidence": {
+            "score": 2,
+            "specific_issues": [
+              "Description written in Chinese without English translation, reducing accessibility for many agents",
+              "No indication of when to use this tool vs other web-fetching tools",
+              "Output format unspecified (HTML/Markdown/plain text?)",
+              "No mention of JavaScript rendering, authentication, or redirect handling",
+              "No error behavior documented (timeouts, 404s, blocked content)",
+              "Parameter descriptions also in Chinese only",
+              "No examples of valid URL formats or constraints"
+            ]
+          },
+          "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+          "affected_entity": "fetch_content"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "composability",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "composability.idempotency-violation",
+          "reason": "fewer than 2 repeated call groups with 2+ successes (9 group(s) skipped)"
+        },
+        {
+          "check_id": "composability.concurrency-safety",
+          "reason": "skipped 2 tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each"
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "security",
+      "score": 90.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `fetch_content` indicates arbitrary network access without safeguards",
+          "description": "Tool description suggests arbitrary network access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "fetch_content",
+            "risk": "arbitrary network access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "fetch_content"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "compliance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "compliance.data-residency-signals",
+          "reason": "no expected_regions configured"
+        }
+      ]
+    },
+    {
+      "dimension": "conformance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "performance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "performance.concurrent-session-scaling",
+          "reason": "need >= 3 sessions, only 1 found"
+        },
+        {
+          "check_id": "performance.throughput-degradation",
+          "reason": "need >= 20 tool/call responses, only 9 found"
+        }
+      ]
+    }
+  ],
+  "top_findings": [
+    {
+      "check_id": "efficiency.response-payload-bloat",
+      "severity": "high",
+      "title": "Tool `fetch_content` response p95 is 24144 bytes (~6036 tokens)",
+      "description": "Responses are too large. p95=24144B across 4 calls.",
+      "evidence": {
+        "tool": "fetch_content",
+        "p95_bytes": 24144,
+        "call_count": 4
+      },
+      "remediation": "Return summaries by default, paginate large results, or use resources instead.",
+      "affected_entity": "fetch_content"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "high",
+      "title": "Tool `search`: 4 schema-invalid calls accepted",
+      "description": "Server accepted 4 of 10 calls that violated the declared input schema.",
+      "evidence": {
+        "tool": "search",
+        "invalid_accepted": 4,
+        "valid_rejected": 0,
+        "total": 10
+      },
+      "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+      "affected_entity": "search"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "high",
+      "title": "Tool `fetch_content`: 4 schema-invalid calls accepted",
+      "description": "Server accepted 4 of 9 calls that violated the declared input schema.",
+      "evidence": {
+        "tool": "fetch_content",
+        "invalid_accepted": 4,
+        "valid_rejected": 0,
+        "total": 9
+      },
+      "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+      "affected_entity": "fetch_content"
+    },
+    {
+      "check_id": "accuracy.argument-validation-gap",
+      "severity": "high",
+      "title": "Tool `search` accepted 3 calls with missing required arguments",
+      "description": "Server is not validating required fields, accepting incomplete input.",
+      "evidence": {
+        "tool": "search",
+        "gap_count": 3
+      },
+      "remediation": "Validate all required arguments and return an error when they are missing.",
+      "affected_entity": "search"
+    },
+    {
+      "check_id": "accuracy.argument-validation-gap",
+      "severity": "high",
+      "title": "Tool `fetch_content` accepted 3 calls with missing required arguments",
+      "description": "Server is not validating required fields, accepting incomplete input.",
+      "evidence": {
+        "tool": "fetch_content",
+        "gap_count": 3
+      },
+      "remediation": "Validate all required arguments and return an error when they are missing.",
+      "affected_entity": "fetch_content"
+    },
+    {
+      "check_id": "discoverability.description-clarity",
+      "severity": "medium",
+      "title": "Tool `search` has unclear description (score 2/5)",
+      "description": "The description and parameter docs are written in Chinese, which limits accessibility for agents/users operating in other languages. While the schema itself is structurally clear (query, max_results, region with examples), the top-level description is extremely terse ('Search on DuckDuckGo and return formatted results') and omits key information: what 'formatted results' means (fields returned, structure), when to use this vs. other search tools, rate limits or constraints, valid region code format/list, and behavior when no results are found. The generic name 'search' also risks collision with other search tools without disambiguation.",
+      "evidence": {
+        "score": 2,
+        "specific_issues": [
+          "Description and parameter descriptions are in Chinese only — not localized for an English-language agent context",
+          "Tool name 'search' is generic; doesn't signal it's DuckDuckGo-specific without reading the description",
+          "No description of the result format/shape (what fields come back per result)",
+          "No 'when to use' guidance vs. other web search tools (e.g., WebSearch, WebFetch)",
+          "No mention of constraints: rate limits, max value for max_results, safe-search behavior, freshness",
+          "Region parameter gives a few examples but no link/reference to the full list of valid codes",
+          "No mention of error behavior (empty results, network failure, blocked queries)"
+        ]
+      },
+      "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+      "affected_entity": "search"
+    },
+    {
+      "check_id": "discoverability.description-clarity",
+      "severity": "medium",
+      "title": "Tool `fetch_content` has unclear description (score 2/5)",
+      "description": "The description is written in Chinese ('Fetch and parse web page content from URL') and is extremely brief. While the basic function is conveyable, it lacks crucial information: when to use it vs alternatives, what format the parsed content returns in (HTML stripped? Markdown? plain text?), what happens on failure, whether JavaScript is rendered, authentication support, or rate limits. The parameter descriptions are also in Chinese, which may cause issues for English-operating agents. The max_length default of 8000 is documented but units (characters) are only clear from the Chinese description.",
+      "evidence": {
+        "score": 2,
+        "specific_issues": [
+          "Description written in Chinese without English translation, reducing accessibility for many agents",
+          "No indication of when to use this tool vs other web-fetching tools",
+          "Output format unspecified (HTML/Markdown/plain text?)",
+          "No mention of JavaScript rendering, authentication, or redirect handling",
+          "No error behavior documented (timeouts, 404s, blocked content)",
+          "Parameter descriptions also in Chinese only",
+          "No examples of valid URL formats or constraints"
+        ]
+      },
+      "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+      "affected_entity": "fetch_content"
+    },
+    {
+      "check_id": "security.excessive-permissions",
+      "severity": "medium",
+      "title": "Tool `fetch_content` indicates arbitrary network access without safeguards",
+      "description": "Tool description suggests arbitrary network access capability with no mention of sandboxing or confirmation.",
+      "evidence": {
+        "tool": "fetch_content",
+        "risk": "arbitrary network access"
+      },
+      "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+      "affected_entity": "fetch_content"
+    }
+  ],
+  "total_events": 48,
+  "total_sessions": 1,
+  "tool_count": 2,
+  "call_count": 21,
+  "timestamp": "2026-05-18T09:29:02.726714Z"
+}

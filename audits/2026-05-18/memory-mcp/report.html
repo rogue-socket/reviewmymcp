@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCP Audit Report — memory-server</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; background: #fafafa; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+  .grade { display: inline-block; font-size: 2rem; font-weight: bold; padding: 0.25rem 0.75rem; border-radius: 6px; color: white; }
+  .grade-A { background: #2ecc71; } .grade-B { background: #3498db; } .grade-C { background: #f39c12; } .grade-D { background: #e74c3c; } .grade-F { background: #c0392b; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  th { background: #f0f0f0; }
+  .severity-critical { color: #c0392b; font-weight: bold; } .severity-high { color: #e74c3c; } .severity-medium { color: #f39c12; } .severity-low { color: #3498db; }
+  .finding { margin: 1rem 0; padding: 0.75rem; background: white; border-left: 4px solid #ddd; border-radius: 4px; }
+  .finding-critical { border-left-color: #c0392b; } .finding-high { border-left-color: #e74c3c; } .finding-medium { border-left-color: #f39c12; }
+  .remediation { color: #666; font-style: italic; margin-top: 0.25rem; }
+  details { margin: 0.5rem 0; }
+  summary { cursor: pointer; font-weight: bold; }
+  .meta { color: #666; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>MCP Server Audit Report</h1>
+<div class="meta">
+  <p>Server: <strong>memory-server</strong> v0.6.3</p>
+  <p>Protocol: 2025-11-25 | Events: 132 | Sessions: 1 | Tools: 9 | Calls: 63</p>
+  <p>Date: 2026-05-18 10:38 UTC</p>
+</div>
+
+<h2>Dimension Scores</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Score</th><th>Grade</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Skipped</th></tr></thead>
+  <tbody>
+  
+  <tr>
+    <td>accuracy</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  
+  <tr>
+    <td>compliance</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  
+  <tr>
+    <td>composability</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>2</td>
+  </tr>
+  
+  <tr>
+    <td>conformance</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  
+  <tr>
+    <td>discoverability</td>
+    <td>80</td>
+    <td><span class="grade grade-B" style="font-size:1rem;padding:0.1rem 0.4rem;">B</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>4</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  
+  <tr>
+    <td>efficiency</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  
+  <tr>
+    <td>performance</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>2</td>
+  </tr>
+  
+  <tr>
+    <td>reliability</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  
+  <tr>
+    <td>security</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  
+  </tbody>
+</table>
+
+
+
+
+<h3>Skipped Checks</h3>
+<table>
+  <thead><tr><th>Check</th><th>Reason</th></tr></thead>
+  <tbody>
+  
+  <tr><td>efficiency.latency-cliff</td><td>fewer than 3 latency observations for 6 tool(s)</td></tr>
+  
+  <tr><td>accuracy.output-schema-drift</td><td>fewer than 3 responses for 6 tool(s)</td></tr>
+  
+  <tr><td>composability.idempotency-violation</td><td>fewer than 2 repeated call groups with 2+ successes (19 group(s) skipped)</td></tr>
+  
+  <tr><td>composability.concurrency-safety</td><td>skipped 9 tool(s): need &gt;= 5 pairs and &gt;= 3 concurrent+sequential samples each</td></tr>
+  
+  <tr><td>reliability.error-rate</td><td>fewer than 3 calls for 6 tool(s)</td></tr>
+  
+  <tr><td>compliance.data-residency-signals</td><td>no expected_regions configured</td></tr>
+  
+  <tr><td>performance.concurrent-session-scaling</td><td>need &gt;= 3 sessions, only 1 found</td></tr>
+  
+  <tr><td>performance.throughput-degradation</td><td>need &gt;= 20 tool/call responses, only 19 found</td></tr>
+  
+  </tbody>
+</table>
+
+
+<h2>Top Findings</h2>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>discoverability.description-clarity</strong>
+  <p>Tool `create_entities` has unclear description (score 2/5)</p>
+  <p>The description is minimal — a single sentence that states what the tool does at a surface level (&#39;Create multiple new entities in the knowledge graph&#39;) but provides no context about what a &#39;knowledge graph&#39; is in this system, when to use the tool, what constitutes a valid entity, what &#39;entityType&#39; values are expected/allowed, what &#39;observations&#39; should contain, or how this interacts with related tools. Parameter descriptions are tautological (&#39;The name of the entity&#39;, &#39;The type of the entity&#39;) and add no information beyond the field name. An agent would have to guess at conventions and usage.</p>
+  <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+</div>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>discoverability.description-clarity</strong>
+  <p>Tool `add_observations` has unclear description (score 2/5)</p>
+  <p>The description is minimal and assumes domain knowledge of a &#39;knowledge graph&#39; system without explaining what it is, what entities/observations are, when to use the tool, or any constraints. While the schema clarifies the parameter shape, the description itself does not state when an agent should invoke this tool versus alternatives, what makes a good &#39;observation&#39;, or how it differs from creating entities or relations. An agent encountering this in isolation would have to guess at the broader workflow.</p>
+  <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+</div>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>discoverability.description-clarity</strong>
+  <p>Tool `read_graph` has unclear description (score 2/5)</p>
+  <p>The description is extremely brief and ambiguous. While it tells what the tool does at a surface level (&#39;reads the entire knowledge graph&#39;), it fails to specify what &#39;knowledge graph&#39; refers to, when to use this tool, what the output format/structure will be, performance considerations for reading an &#39;entire&#39; graph, or how this relates to other graph tools. An agent would have to guess at most usage details.</p>
+  <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+</div>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>discoverability.description-clarity</strong>
+  <p>Tool `open_nodes` has unclear description (score 2/5)</p>
+  <p>The description is minimal and ambiguous. It states what the tool does at a surface level (&#39;open specific nodes in the knowledge graph by their names&#39;) but doesn&#39;t explain what &#39;opening&#39; a node means (read? activate? expand?), what is returned, when to use it versus other graph tools, what a &#39;node&#39; represents, or what format/naming convention the names parameter expects. An agent would have to guess at usage and behavior.</p>
+  <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+<details>
+  <summary>discoverability — 4 findings</summary>
+  
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>discoverability.description-clarity</strong>
+    <p>Tool `create_entities` has unclear description (score 2/5)</p>
+    <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+  </div>
+  
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>discoverability.description-clarity</strong>
+    <p>Tool `add_observations` has unclear description (score 2/5)</p>
+    <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+  </div>
+  
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>discoverability.description-clarity</strong>
+    <p>Tool `read_graph` has unclear description (score 2/5)</p>
+    <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+  </div>
+  
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>discoverability.description-clarity</strong>
+    <p>Tool `open_nodes` has unclear description (score 2/5)</p>
+    <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+  </div>
+  
+</details>
+
+
+
+
+
+
+
+
+
+
+
+<hr>
+<p class="meta">Generated by <a href="https://github.com/reviewmymcp/reviewmymcp">reviewmymcp</a> v0.1.0</p>
+</body>
+</html>

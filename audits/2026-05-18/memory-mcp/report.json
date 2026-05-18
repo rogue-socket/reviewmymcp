@@ -1,0 +1,663 @@
+{
+  "server_meta": {
+    "server_name": "memory-server",
+    "server_version": "0.6.3",
+    "protocol_version": "2025-11-25",
+    "instructions": "",
+    "server_capabilities": {
+      "logging": false,
+      "prompts": false,
+      "prompts_list_changed": false,
+      "resources": false,
+      "resources_subscribe": false,
+      "resources_list_changed": false,
+      "tools": true,
+      "tools_list_changed": true,
+      "tasks": false,
+      "tasks_list": false,
+      "tasks_cancel": false,
+      "raw": {
+        "tools": {
+          "listChanged": true
+        }
+      }
+    },
+    "client_capabilities": {
+      "roots": true,
+      "sampling": true,
+      "elicitation_form": false,
+      "elicitation_url": false,
+      "tasks": false,
+      "raw": {
+        "roots": {
+          "listChanged": true
+        },
+        "sampling": {}
+      }
+    },
+    "tools": [
+      {
+        "name": "create_entities",
+        "description": "Create multiple new entities in the knowledge graph",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "entities": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the entity"
+                  },
+                  "entityType": {
+                    "type": "string",
+                    "description": "The type of the entity"
+                  },
+                  "observations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "An array of observation contents associated with the entity"
+                  }
+                },
+                "required": [
+                  "name",
+                  "entityType",
+                  "observations"
+                ]
+              }
+            }
+          },
+          "required": [
+            "entities"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "create_relations",
+        "description": "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "The name of the entity where the relation starts"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "The name of the entity where the relation ends"
+                  },
+                  "relationType": {
+                    "type": "string",
+                    "description": "The type of the relation"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to",
+                  "relationType"
+                ]
+              }
+            }
+          },
+          "required": [
+            "relations"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "add_observations",
+        "description": "Add new observations to existing entities in the knowledge graph",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "entityName": {
+                    "type": "string",
+                    "description": "The name of the entity to add the observations to"
+                  },
+                  "contents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "An array of observation contents to add"
+                  }
+                },
+                "required": [
+                  "entityName",
+                  "contents"
+                ]
+              }
+            }
+          },
+          "required": [
+            "observations"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "delete_entities",
+        "description": "Delete multiple entities and their associated relations from the knowledge graph",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "entityNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "An array of entity names to delete"
+            }
+          },
+          "required": [
+            "entityNames"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "delete_observations",
+        "description": "Delete specific observations from entities in the knowledge graph",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "deletions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "entityName": {
+                    "type": "string",
+                    "description": "The name of the entity containing the observations"
+                  },
+                  "observations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "An array of observations to delete"
+                  }
+                },
+                "required": [
+                  "entityName",
+                  "observations"
+                ]
+              }
+            }
+          },
+          "required": [
+            "deletions"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "delete_relations",
+        "description": "Delete multiple relations from the knowledge graph",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "The name of the entity where the relation starts"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "The name of the entity where the relation ends"
+                  },
+                  "relationType": {
+                    "type": "string",
+                    "description": "The type of the relation"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to",
+                  "relationType"
+                ]
+              },
+              "description": "An array of relations to delete"
+            }
+          },
+          "required": [
+            "relations"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "read_graph",
+        "description": "Read the entire knowledge graph",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "search_nodes",
+        "description": "Search for nodes in the knowledge graph based on a query",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query to match against entity names, types, and observation content"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "open_nodes",
+        "description": "Open specific nodes in the knowledge graph by their names",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "An array of entity names to retrieve"
+            }
+          },
+          "required": [
+            "names"
+          ]
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      }
+    ]
+  },
+  "dimension_scores": [
+    {
+      "dimension": "efficiency",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "efficiency.latency-cliff",
+          "reason": "fewer than 3 latency observations for 4 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "accuracy",
+      "score": 90.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "medium",
+          "title": "Tool `add_observations`: 1 schema-valid calls rejected",
+          "description": "Server rejected 1 of 8 calls despite valid arguments.",
+          "evidence": {
+            "tool": "add_observations",
+            "invalid_accepted": 0,
+            "valid_rejected": 1,
+            "total": 8
+          },
+          "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+          "affected_entity": "add_observations"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "accuracy.output-schema-drift",
+          "reason": "fewer than 3 responses for 5 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "discoverability",
+      "score": 82.7,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 3,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "discoverability.description-clarity",
+          "severity": "medium",
+          "title": "Tool `create_entities` has unclear description (score 2/5)",
+          "description": "The description 'Create multiple new entities in the knowledge graph' is minimal and ambiguous. It doesn't explain what a 'knowledge graph' is in this context, what entities are for, when to use this tool, what valid entityType values are, or what observations should contain. While the schema shows the structure, the field-level descriptions are tautological ('The name of the entity', 'The type of the entity') and provide no actionable guidance. An agent would have to guess at appropriate usage patterns.",
+          "evidence": {
+            "score": 2,
+            "specific_issues": [
+              "No explanation of what 'knowledge graph' refers to or its purpose",
+              "No guidance on when to use this tool vs. alternatives",
+              "No examples of valid entityType values or naming conventions",
+              "Field descriptions are circular/tautological ('name of the entity', 'type of the entity')",
+              "No description of what 'observations' represent or how they should be formatted",
+              "No mention of constraints (e.g., uniqueness of names, duplicate handling, max entities per call)",
+              "No indication of side effects or persistence behavior"
+            ]
+          },
+          "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+          "affected_entity": "create_entities"
+        },
+        {
+          "check_id": "discoverability.description-clarity",
+          "severity": "medium",
+          "title": "Tool `read_graph` has unclear description (score 2/5)",
+          "description": "The description is extremely terse at just five words. While it conveys the basic action (reading the entire knowledge graph), it omits critical information: what 'knowledge graph' refers to in this context, what the returned structure looks like, when an agent should use this tool versus alternatives, performance considerations for large graphs, and what format the output takes. An agent would have to guess at usage patterns and could not anticipate the response shape.",
+          "evidence": {
+            "score": 2,
+            "specific_issues": [
+              "No explanation of what the 'knowledge graph' contains or represents",
+              "No guidance on when to use this tool vs. a more targeted query",
+              "No description of the return value structure or format",
+              "No mention of performance/size considerations for reading the 'entire' graph",
+              "Empty input schema is fine, but no context on whether filters/pagination exist elsewhere"
+            ]
+          },
+          "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+          "affected_entity": "read_graph"
+        },
+        {
+          "check_id": "discoverability.description-clarity",
+          "severity": "medium",
+          "title": "Tool `open_nodes` has unclear description (score 2/5)",
+          "description": "The description is minimal and ambiguous. It states what the tool does at a surface level ('open specific nodes in the knowledge graph by their names') but doesn't explain what 'opening' a node means (retrieve metadata? read contents? activate?), what a 'knowledge graph' refers to in this context, what data is returned, when to use this tool versus alternatives, or how node names are formatted/discovered. An agent would have to guess at usage.",
+          "evidence": {
+            "score": 2,
+            "specific_issues": [
+              "'Open' is undefined — unclear if it returns node data, contents, relationships, or all of the above",
+              "No context on what the 'knowledge graph' contains or where it comes from",
+              "No guidance on when to use this tool versus searching or listing nodes",
+              "No description of the return value/output shape",
+              "No information on how to discover valid node names (case sensitivity, format, namespace)",
+              "No mention of behavior when a name doesn't exist (error vs. silent skip)",
+              "Parameter description ('An array of entity names to retrieve') conflicts slightly with tool name ('nodes' vs 'entities')"
+            ]
+          },
+          "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+          "affected_entity": "open_nodes"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "composability",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "composability.idempotency-violation",
+          "reason": "fewer than 2 repeated call groups with 2+ successes (22 group(s) skipped)"
+        },
+        {
+          "check_id": "composability.concurrency-safety",
+          "reason": "skipped 9 tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each"
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "score": 84.2,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "reliability.error-rate",
+          "severity": "high",
+          "title": "Tool `add_observations` has 33% error rate",
+          "description": "1 of 3 calls failed.",
+          "evidence": {
+            "tool": "add_observations",
+            "error_rate": 0.3333333333333333,
+            "total": 3,
+            "errors": 1
+          },
+          "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+          "affected_entity": "add_observations"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "reliability.error-rate",
+          "reason": "fewer than 3 calls for 4 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "security",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "compliance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "compliance.data-residency-signals",
+          "reason": "no expected_regions configured"
+        }
+      ]
+    },
+    {
+      "dimension": "conformance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "performance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "performance.concurrent-session-scaling",
+          "reason": "need >= 3 sessions, only 1 found"
+        },
+        {
+          "check_id": "performance.throughput-degradation",
+          "reason": "insufficient time windows (need >= 3, got 1)"
+        }
+      ]
+    }
+  ],
+  "top_findings": [
+    {
+      "check_id": "reliability.error-rate",
+      "severity": "high",
+      "title": "Tool `add_observations` has 33% error rate",
+      "description": "1 of 3 calls failed.",
+      "evidence": {
+        "tool": "add_observations",
+        "error_rate": 0.3333333333333333,
+        "total": 3,
+        "errors": 1
+      },
+      "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+      "affected_entity": "add_observations"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "medium",
+      "title": "Tool `add_observations`: 1 schema-valid calls rejected",
+      "description": "Server rejected 1 of 8 calls despite valid arguments.",
+      "evidence": {
+        "tool": "add_observations",
+        "invalid_accepted": 0,
+        "valid_rejected": 1,
+        "total": 8
+      },
+      "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+      "affected_entity": "add_observations"
+    },
+    {
+      "check_id": "discoverability.description-clarity",
+      "severity": "medium",
+      "title": "Tool `create_entities` has unclear description (score 2/5)",
+      "description": "The description 'Create multiple new entities in the knowledge graph' is minimal and ambiguous. It doesn't explain what a 'knowledge graph' is in this context, what entities are for, when to use this tool, what valid entityType values are, or what observations should contain. While the schema shows the structure, the field-level descriptions are tautological ('The name of the entity', 'The type of the entity') and provide no actionable guidance. An agent would have to guess at appropriate usage patterns.",
+      "evidence": {
+        "score": 2,
+        "specific_issues": [
+          "No explanation of what 'knowledge graph' refers to or its purpose",
+          "No guidance on when to use this tool vs. alternatives",
+          "No examples of valid entityType values or naming conventions",
+          "Field descriptions are circular/tautological ('name of the entity', 'type of the entity')",
+          "No description of what 'observations' represent or how they should be formatted",
+          "No mention of constraints (e.g., uniqueness of names, duplicate handling, max entities per call)",
+          "No indication of side effects or persistence behavior"
+        ]
+      },
+      "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+      "affected_entity": "create_entities"
+    },
+    {
+      "check_id": "discoverability.description-clarity",
+      "severity": "medium",
+      "title": "Tool `read_graph` has unclear description (score 2/5)",
+      "description": "The description is extremely terse at just five words. While it conveys the basic action (reading the entire knowledge graph), it omits critical information: what 'knowledge graph' refers to in this context, what the returned structure looks like, when an agent should use this tool versus alternatives, performance considerations for large graphs, and what format the output takes. An agent would have to guess at usage patterns and could not anticipate the response shape.",
+      "evidence": {
+        "score": 2,
+        "specific_issues": [
+          "No explanation of what the 'knowledge graph' contains or represents",
+          "No guidance on when to use this tool vs. a more targeted query",
+          "No description of the return value structure or format",
+          "No mention of performance/size considerations for reading the 'entire' graph",
+          "Empty input schema is fine, but no context on whether filters/pagination exist elsewhere"
+        ]
+      },
+      "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+      "affected_entity": "read_graph"
+    },
+    {
+      "check_id": "discoverability.description-clarity",
+      "severity": "medium",
+      "title": "Tool `open_nodes` has unclear description (score 2/5)",
+      "description": "The description is minimal and ambiguous. It states what the tool does at a surface level ('open specific nodes in the knowledge graph by their names') but doesn't explain what 'opening' a node means (retrieve metadata? read contents? activate?), what a 'knowledge graph' refers to in this context, what data is returned, when to use this tool versus alternatives, or how node names are formatted/discovered. An agent would have to guess at usage.",
+      "evidence": {
+        "score": 2,
+        "specific_issues": [
+          "'Open' is undefined — unclear if it returns node data, contents, relationships, or all of the above",
+          "No context on what the 'knowledge graph' contains or where it comes from",
+          "No guidance on when to use this tool versus searching or listing nodes",
+          "No description of the return value/output shape",
+          "No information on how to discover valid node names (case sensitivity, format, namespace)",
+          "No mention of behavior when a name doesn't exist (error vs. silent skip)",
+          "Parameter description ('An array of entity names to retrieve') conflicts slightly with tool name ('nodes' vs 'entities')"
+        ]
+      },
+      "remediation": "Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+      "affected_entity": "open_nodes"
+    }
+  ],
+  "total_events": 138,
+  "total_sessions": 1,
+  "tool_count": 9,
+  "call_count": 66,
+  "timestamp": "2026-05-18T12:33:45.994945Z"
+}
