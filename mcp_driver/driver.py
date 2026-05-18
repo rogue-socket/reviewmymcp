@@ -199,6 +199,25 @@ class StdioAgentDriver:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
 
+    async def _respond_to_server_request(self, rid: int | str, method: str) -> None:
+        if method == "roots/list":
+            response = {"jsonrpc": "2.0", "id": rid, "result": {"roots": []}}
+        elif method == "ping":
+            response = {"jsonrpc": "2.0", "id": rid, "result": {}}
+        else:
+            response = {
+                "jsonrpc": "2.0",
+                "id": rid,
+                "error": {"code": -32601, "message": f"Method not found: {method}"},
+            }
+        self._record(response, CLIENT_TO_SERVER)
+        if self._process and self._process.stdin:
+            try:
+                self._process.stdin.write((json.dumps(response) + "\n").encode())
+                await self._process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
     async def _read_responses(self) -> None:
         if not self._process or not self._process.stdout:
             return
@@ -223,6 +242,14 @@ class StdioAgentDriver:
                     latency_ms = (time.monotonic() - self._send_times.pop(rid)) * 1000
 
                 self._record(msg, SERVER_TO_CLIENT, latency_ms=latency_ms)
+
+                # Server-originated request — must reply or it orphans.
+                # `sampling/createMessage` is intentionally left orphaned by
+                # the `sample_llm_trigger` scenario in everything.py.
+                method = msg.get("method")
+                if method and rid is not None and method != "sampling/createMessage":
+                    await self._respond_to_server_request(rid, method)
+                    continue
 
                 if rid is not None and rid in self._pending:
                     future = self._pending.pop(rid)
