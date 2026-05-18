@@ -1,4 +1,10 @@
-"""Anthropic Claude judge implementation."""
+"""Anthropic Claude judge implementation.
+
+When ANTHROPIC_API_KEY is set, uses the standard Anthropic API.
+Otherwise routes through claude-agent-sdk, which talks to an authenticated
+local `claude` CLI subprocess — letting the user spend their Claude Code
+subscription instead of pay-per-token API credits.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +23,15 @@ class AnthropicJudge:
     def __init__(self, api_key: str | None = None, model: str = ""):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self._model = model or DEFAULT_MODEL
-        self._client = AsyncAnthropic(api_key=self._api_key)
+        self._use_sdk = not self._api_key
+        self._client = None if self._use_sdk else AsyncAnthropic(api_key=self._api_key)
 
     async def complete(self, request: JudgeRequest) -> JudgeResponse:
+        if self._use_sdk:
+            return await self._complete_via_sdk(request)
+        return await self._complete_via_api(request)
+
+    async def _complete_via_api(self, request: JudgeRequest) -> JudgeResponse:
         try:
             response = await self._client.messages.create(
                 model=self._model,
@@ -40,5 +52,38 @@ class AnthropicJudge:
                 raw_text=str(e),
                 parsed=None,
                 model=self._model,
+                provider=self.provider_name,
+            )
+
+    async def _complete_via_sdk(self, request: JudgeRequest) -> JudgeResponse:
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ClaudeAgentOptions,
+            TextBlock,
+            query,
+        )
+
+        text_parts: list[str] = []
+        try:
+            async for msg in query(
+                prompt=request.user,
+                options=ClaudeAgentOptions(system_prompt=request.system, max_turns=1),
+            ):
+                if isinstance(msg, AssistantMessage):
+                    for blk in msg.content:
+                        if isinstance(blk, TextBlock):
+                            text_parts.append(blk.text)
+            raw_text = "".join(text_parts)
+            return JudgeResponse(
+                raw_text=raw_text,
+                parsed=parse_json_response(raw_text),
+                model="claude-agent-sdk",
+                provider=self.provider_name,
+            )
+        except Exception as e:
+            return JudgeResponse(
+                raw_text=str(e),
+                parsed=None,
+                model="claude-agent-sdk",
                 provider=self.provider_name,
             )
