@@ -149,6 +149,44 @@ def test_destructive_tool_with_destructive_hint_ok():
     assert missing_hint == []
 
 
+def test_mutating_tool_missing_behavior_annotations():
+    tool = make_tool_def("create_pull_request", description="Create a pull request")
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    missing_annotations = [
+        f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"
+    ]
+
+    assert len(missing_annotations) == 1
+    assert missing_annotations[0].affected_entity == "create_pull_request"
+
+
+def test_mutating_tool_with_behavior_annotation_ok():
+    tool = make_tool_def(
+        "create_pull_request",
+        description="Create a pull request",
+        annotations={"readOnlyHint": False, "idempotentHint": False},
+    )
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    missing_annotations = [
+        f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"
+    ]
+
+    assert missing_annotations == []
+
+
+def test_destructive_tool_not_duplicated_as_mutating_annotation_gap():
+    tool = make_tool_def("delete_entities", description="Delete entities permanently")
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    mutating = [f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"]
+    destructive = [f for f in result.findings if f.check_id == "conformance.destructive-hint-missing"]
+
+    assert mutating == []
+    assert len(destructive) == 1
+
+
 def test_output_schema_wire_format_flags_zod_fingerprint():
     tool = make_tool_def(
         "get_memory",

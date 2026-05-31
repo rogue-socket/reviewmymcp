@@ -1825,14 +1825,147 @@
     },
     {
       "dimension": "conformance",
-      "score": 100.0,
-      "grade": "A",
+      "score": 66.8,
+      "grade": "C",
       "critical_count": 0,
       "high_count": 0,
-      "medium_count": 0,
+      "medium_count": 11,
       "low_count": 0,
       "info_count": 0,
-      "findings": [],
+      "findings": [
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `create_or_update_file` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "create_or_update_file",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "create_or_update_file"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `create_repository` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "create_repository",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "create_repository"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `push_files` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "push_files",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "push_files"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `create_issue` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "create_issue",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "create_issue"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `create_pull_request` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "create_pull_request",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "create_pull_request"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `create_branch` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "create_branch",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "create_branch"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `update_issue` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "update_issue",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "update_issue"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `add_issue_comment` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "add_issue_comment",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "add_issue_comment"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `create_pull_request_review` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "create_pull_request_review",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "create_pull_request_review"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `merge_pull_request` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "merge_pull_request",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "merge_pull_request"
+        },
+        {
+          "check_id": "conformance.mutating-annotations-missing",
+          "severity": "medium",
+          "title": "Tool `update_pull_request_branch` appears mutating but lacks behavior annotations",
+          "description": "Tool name or description suggests state-changing behavior, but tools/list did not advertise readOnlyHint, destructiveHint, or idempotentHint.",
+          "evidence": {
+            "tool": "update_pull_request_branch",
+            "annotations": {}
+          },
+          "remediation": "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate destructiveHint and idempotentHint values.",
+          "affected_entity": "update_pull_request_branch"
+        }
+      ],
       "checks_skipped": []
     },
     {
@@ -2007,5 +2140,5 @@
   "total_sessions": 1,
   "tool_count": 26,
   "call_count": 43,
-  "timestamp": "2026-05-31T20:48:16.913820Z"
+  "timestamp": "2026-05-31T21:11:06.087953Z"
 }

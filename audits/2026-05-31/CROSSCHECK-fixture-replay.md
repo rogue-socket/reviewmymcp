@@ -27,7 +27,7 @@ Source packages inspected:
 |---|---:|---|---|
 | filesystem | 53 | efficiency B, accuracy B, composability B, reliability B, security C | Findings mostly reflect aggressive probe inputs and generic file-access heuristics. |
 | everything | 48 | accuracy B, discoverability B, reliability B | One HIGH reliability finding is a stale harness artifact: scenario calls old tool name `add`. |
-| github | 43 | efficiency C, accuracy B, discoverability D, reliability B, compliance B | Large payloads and missing annotations are real; auth/scope envelope is still invisible. |
+| github | 43 | efficiency C, accuracy B, discoverability D, reliability B, compliance B, conformance C | Large payloads and missing annotations are real; auth/scope envelope is still invisible. |
 | playwright | 31 | efficiency C, accuracy D, discoverability C, security B | Browser automation risk is real; name-quality linter badly overfires on `browser_*` naming. |
 | web_search | 35 | reliability B | Silent empty-success behavior is now detected, but provenance concerns remain invisible in replay-only logs. |
 
@@ -49,7 +49,7 @@ The `gzip-file-as-resource` source has real network fetch risk, but also real mi
 
 The audit correctly finds large response payloads for search/list/read tools; source calls GitHub REST endpoints directly and can return large JSON. The mutating surface is also real: tools include `create_or_update_file`, `push_files`, `create_repository`, `create_issue`, `create_pull_request`, `merge_pull_request`, and `update_pull_request_branch`.
 
-Missed/under-modeled: none of those mutating tools carry MCP annotations in `tools/list`. The new `conformance.destructive-hint-missing` check does not fire because it is intentionally limited to destructive verbs such as delete/remove/drop. This shows the annotation check should eventually broaden to "mutating tool missing readOnlyHint/destructiveHint/idempotentHint", not only permanent delete tools.
+Missed/under-modeled in the original replay: none of those mutating tools carried MCP annotations in `tools/list`. The first implementation only caught destructive verbs such as delete/remove/drop; the follow-up `conformance.mutating-annotations-missing` check broadens this to create/update/push/merge-style tools that lack `readOnlyHint`, `destructiveHint`, or `idempotentHint`.
 
 Also missed: auth scope awareness. The server reads `GITHUB_PERSONAL_ACCESS_TOKEN`, but the report has no token-scope manifest and the package does not advertise per-tool required scopes. Issue #19's new metadata path helps when scopes are supplied, but GitHub still needs a source/API-derived scope map.
 
@@ -73,7 +73,7 @@ The tool does validate `query` and `limit`, caps `limit` at 10, and returns Axio
 |---|---|---|
 | Harness drift / stale scenario tool names | everything | Fix harare scenario names before using fixture grades as evidence. |
 | Heuristic overclaim on sandboxed file/browser tools | filesystem, playwright | Issue #22 should account for explicit sandbox/annotation evidence and domain prefixes. |
-| Missing mutating-tool annotations beyond delete verbs | github | Broaden #18 follow-up to all mutating operations, not just destructive deletes. |
+| Missing mutating-tool annotations beyond delete verbs | github | Follow-up implemented by `conformance.mutating-annotations-missing`; refreshed replay now flags 11 GitHub tools. |
 | Auth scope envelope missing | github, sentry | #19 foundation is in place; needs source/API scope mapping for GitHub-like servers. |
 | Scraper fragility / empty-success behavior | web_search, ddg | #11 now detects empty-success clusters; #13 stress mode should expose rate-limit behavior. |
 | OutputSchema wire-format defect | memory only in current set | #20 is useful, but these five fixture servers did not reproduce it. |
@@ -83,7 +83,7 @@ The tool does validate `query` and `limit`, caps `limit` at 10, and returns Axio
 ## Recommendations
 
 1. Fix `harare/scenarios/everything.py` before treating Everything fixture regressions as product findings.
-2. Extend issue #18 after the first implementation: flag mutating tools without any useful annotations, especially GitHub-style create/update/push/merge tools.
+2. Use the refreshed GitHub replay as evidence that `conformance.mutating-annotations-missing` catches create/update/push/merge-style annotation gaps.
 3. Use #22 to recalibrate `security.excessive-permissions` and `discoverability.name-quality` with evidence from filesystem and Playwright.
 4. Add package/runtime envelope metadata to replay reports when the original command or package spec is known.
 5. Treat this directory as dated evidence for #15's first cross-check pass; a deeper source/community pass for GitHub and Playwright can be tracked separately.

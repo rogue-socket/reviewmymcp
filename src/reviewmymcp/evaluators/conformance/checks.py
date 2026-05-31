@@ -19,6 +19,15 @@ from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 STANDARD_ERROR_CODES = {-32700, -32600, -32601, -32602, -32603, -32042}
 DESTRUCTIVE_TOOL_RE = re.compile(r"^(delete|remove|drop|clear|purge|truncate|reset)[_-]", re.IGNORECASE)
 DESTRUCTIVE_DESC_RE = re.compile(r"\b(delete|remove|drop|purge|clear|truncate|reset)\b", re.IGNORECASE)
+MUTATING_TOOL_RE = re.compile(
+    r"^(add|append|assign|create|edit|import|insert|merge|move|patch|post|publish|push|set|submit|update|upload|write)[_-]",
+    re.IGNORECASE,
+)
+MUTATING_DESC_RE = re.compile(
+    r"\b(add|append|assign|create|edit|import|insert|merge|move|patch|publish|push|set|submit|update|upload|write)\b",
+    re.IGNORECASE,
+)
+MUTATION_ANNOTATIONS = {"readOnlyHint", "destructiveHint", "idempotentHint"}
 JSON_SCHEMA_TYPES = {"object", "array", "string", "number", "integer", "boolean", "null"}
 JSON_SCHEMA_TOP_LEVEL_KEYS = {"oneOf", "anyOf", "allOf", "enum", "$ref"}
 NON_JSON_SCHEMA_FINGERPRINTS = {"_def", "_zod", "_validators", "__fields__", "model_fields"}
@@ -48,6 +57,7 @@ class ConformanceEvaluator:
         findings.extend(self._check_notification_correctness(events))
         findings.extend(self._check_is_error_flag_set(events))
         findings.extend(self._check_destructive_hint_missing(server_meta))
+        findings.extend(self._check_mutating_annotations_missing(server_meta))
         findings.extend(self._check_output_schema_wire_format(server_meta))
 
         return EvaluatorResult(
@@ -61,6 +71,7 @@ class ConformanceEvaluator:
                 "conformance.notification-correctness",
                 "conformance.is-error-flag-set",
                 "conformance.destructive-hint-missing",
+                "conformance.mutating-annotations-missing",
                 "conformance.output-schema-wire-format",
             ],
             findings=findings,
@@ -406,7 +417,7 @@ class ConformanceEvaluator:
         findings: list[Finding] = []
         for tool in server_meta.tools:
             text = f"{tool.name} {tool.description}"
-            if not (DESTRUCTIVE_TOOL_RE.search(tool.name) or DESTRUCTIVE_DESC_RE.search(text)):
+            if not _is_destructive_tool(tool.name, text):
                 continue
             if tool.annotations.get("destructiveHint") is True:
                 continue
@@ -424,6 +435,36 @@ class ConformanceEvaluator:
                         "annotations": tool.annotations,
                     },
                     remediation="Set `annotations.destructiveHint: true` for destructive tools so clients can apply safeguards.",
+                    affected_entity=tool.name,
+                )
+            )
+        return findings
+
+    def _check_mutating_annotations_missing(self, server_meta: ServerMeta) -> list[Finding]:
+        findings: list[Finding] = []
+        for tool in server_meta.tools:
+            text = f"{tool.name} {tool.description}"
+            if _is_destructive_tool(tool.name, text) or not _is_mutating_tool(tool.name, text):
+                continue
+            if any(key in tool.annotations for key in MUTATION_ANNOTATIONS):
+                continue
+            findings.append(
+                Finding(
+                    check_id="conformance.mutating-annotations-missing",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool.name}` appears mutating but lacks behavior annotations",
+                    description=(
+                        "Tool name or description suggests state-changing behavior, but tools/list did not advertise "
+                        "readOnlyHint, destructiveHint, or idempotentHint."
+                    ),
+                    evidence={
+                        "tool": tool.name,
+                        "annotations": tool.annotations,
+                    },
+                    remediation=(
+                        "Set behavior annotations for mutating tools, such as readOnlyHint: false plus appropriate "
+                        "destructiveHint and idempotentHint values."
+                    ),
                     affected_entity=tool.name,
                 )
             )
@@ -455,6 +496,14 @@ def _looks_like_error_content(text: str) -> bool:
     if ERROR_FALSE_POSITIVE_RE.search(text):
         return False
     return bool(ERROR_CONTENT_RE.search(text))
+
+
+def _is_destructive_tool(name: str, text: str) -> bool:
+    return bool(DESTRUCTIVE_TOOL_RE.search(name) or DESTRUCTIVE_DESC_RE.search(text))
+
+
+def _is_mutating_tool(name: str, text: str) -> bool:
+    return bool(MUTATING_TOOL_RE.search(name) or MUTATING_DESC_RE.search(text))
 
 
 def _find_non_json_schema_fingerprint(value: Any) -> str | None:

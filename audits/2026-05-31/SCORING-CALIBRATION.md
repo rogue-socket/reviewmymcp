@@ -10,7 +10,7 @@ Calibration used the replay reports in `audits/2026-05-31/fixtures-replay/`:
 | --- | ---: | ---: | --- |
 | everything | 15 | 48 | accuracy/discoverability/reliability B |
 | filesystem | 14 | 53 | security C; efficiency/accuracy/composability/reliability B |
-| github | 26 | 43 | efficiency C, discoverability D; accuracy/reliability/compliance B |
+| github | 26 | 43 | efficiency/conformance C, discoverability D; accuracy/reliability/compliance B |
 | playwright | 23 | 31 | efficiency C, accuracy D, discoverability C, security B |
 | web_search | 1 | 35 | reliability B from silent empty-success behavior |
 
