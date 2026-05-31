@@ -49,6 +49,7 @@ class PerformanceEvaluator:
         skipped: list[SkippedCheck] = []
         findings.extend(self._check_concurrent_session_scaling(events, skipped))
         findings.extend(self._check_throughput_degradation(events, skipped))
+        findings.extend(self._check_throughput_under_load(events))
         findings.extend(self._check_resource_contention(events))
         findings.extend(self._check_connection_pool(events))
 
@@ -57,6 +58,7 @@ class PerformanceEvaluator:
             checks_run=[
                 "performance.concurrent-session-scaling",
                 "performance.throughput-degradation",
+                "performance.throughput-under-load",
                 "performance.resource-contention",
                 "performance.connection-pool-exhaustion",
             ],
@@ -199,6 +201,46 @@ class PerformanceEvaluator:
                         "high_rps": avg_high_rps,
                     },
                     remediation="Identify throughput ceiling and implement backpressure or rate limiting.",
+                )
+            )
+        return findings
+
+    def _check_throughput_under_load(self, events: list[McpEvent]) -> list[Finding]:
+        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
+        baseline_latencies: dict[str, list[float]] = defaultdict(list)
+        stress_latencies: dict[str, list[float]] = defaultdict(list)
+
+        for response in events:
+            if not response.is_response or response.request_event_id not in requests or response.latency_ms is None:
+                continue
+            request = requests[response.request_event_id]
+            tool_name = request.params.get("name", "unknown") if request.params else "unknown"
+            bucket = stress_latencies if (request.is_stress or response.is_stress) else baseline_latencies
+            bucket[tool_name].append(response.latency_ms)
+
+        findings = []
+        for tool_name, stress_values in stress_latencies.items():
+            baseline_values = baseline_latencies.get(tool_name, [])
+            if len(stress_values) < 5 or len(baseline_values) < 3:
+                continue
+            baseline_p95 = _percentile(baseline_values, 95)
+            stress_p95 = _percentile(stress_values, 95)
+            if baseline_p95 <= 0 or stress_p95 / baseline_p95 <= 3:
+                continue
+            findings.append(
+                Finding(
+                    check_id="performance.throughput-under-load",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool_name}` p95 latency degrades {stress_p95 / baseline_p95:.1f}x under stress",
+                    description=f"Baseline p95: {baseline_p95:.0f}ms. Stress p95: {stress_p95:.0f}ms.",
+                    evidence={
+                        "tool": tool_name,
+                        "baseline_p95_ms": baseline_p95,
+                        "stress_p95_ms": stress_p95,
+                        "ratio": stress_p95 / baseline_p95,
+                    },
+                    remediation="Add backpressure, pooling, or rate-limit handling before latency collapses under load.",
+                    affected_entity=tool_name,
                 )
             )
         return findings
