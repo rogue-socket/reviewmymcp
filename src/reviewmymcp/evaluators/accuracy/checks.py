@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 
 import jsonschema
@@ -41,6 +42,12 @@ GENERIC_ERRORS = {
     "server error",
 }
 
+ERROR_AS_CONTENT_RE = re.compile(
+    r"^\s*(?:error\b|failed\b|exception\b|http\s+[45]\d\d\b|unable to\b|cannot\b|"
+    r"错误|失败|无法|erro\b|falha\b|fallo\b|fehler\b|エラー|失敗)",
+    re.IGNORECASE,
+)
+
 
 class AccuracyEvaluator:
     dimension: str = "accuracy"
@@ -60,6 +67,7 @@ class AccuracyEvaluator:
         findings.extend(self._check_schema_misuse(req_map, resp_map, tool_lookup))
         findings.extend(self._check_output_drift(events, req_map, skipped))
         findings.extend(self._check_validation_gap(req_map, resp_map, tool_lookup))
+        findings.extend(self._check_error_channel_correctness(events, req_map))
         findings.extend(self._check_error_message_quality(events, req_map))
         findings.extend(self._check_description_accuracy(events, req_map, resp_map, server_meta, config, skipped))
 
@@ -69,6 +77,7 @@ class AccuracyEvaluator:
                 "accuracy.schema-misuse",
                 "accuracy.output-schema-drift",
                 "accuracy.argument-validation-gap",
+                "accuracy.error-channel-correctness",
                 "accuracy.error-message-quality",
                 "accuracy.description-accuracy",
             ],
@@ -194,6 +203,45 @@ class AccuracyEvaluator:
                 check_id="accuracy.output-schema-drift",
                 reason=f"fewer than 3 responses for {skipped_tools} tool(s)",
             ))
+        return findings
+
+    def _check_error_channel_correctness(
+        self,
+        events: list[McpEvent],
+        req_map: dict[str, McpEvent],
+    ) -> list[Finding]:
+        findings: list[Finding] = []
+        for event in events:
+            if not (
+                event.is_response
+                and not event.is_probe
+                and event.request_event_id in req_map
+                and event.result
+                and not event.is_error
+                and not event.result.get("isError")
+            ):
+                continue
+
+            content = event.result.get("content", [])
+            if not content or not isinstance(content[0], dict) or content[0].get("type") != "text":
+                continue
+            text = content[0].get("text", "")
+            if not isinstance(text, str) or not ERROR_AS_CONTENT_RE.search(text):
+                continue
+
+            req = req_map[event.request_event_id]
+            tool_name = req.params.get("name", "unknown") if req.params else "unknown"
+            findings.append(
+                Finding(
+                    check_id="accuracy.error-channel-correctness",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool_name}` returned error text on the success channel",
+                    description="The response looks successful but its text content appears to communicate a failure.",
+                    evidence={"tool": tool_name, "sample": text[:300]},
+                    remediation="Set `isError: true` for tool-level failures instead of returning error text as successful content.",
+                    affected_entity=tool_name,
+                )
+            )
         return findings
 
     def _check_validation_gap(

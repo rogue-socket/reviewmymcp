@@ -2,7 +2,6 @@
 
 from reviewmymcp.evaluators.base import EvaluatorConfig
 from reviewmymcp.evaluators.composability.checks import ComposabilityEvaluator
-
 from tests.conftest import make_server_meta, make_tool_call_pair
 
 
@@ -33,6 +32,25 @@ def test_error_recovery_not_triggered_for_good_errors():
     result = evaluator.evaluate(events, make_server_meta(), EvaluatorConfig())
     recovery = [f for f in result.findings if f.check_id == "composability.error-recovery-surface"]
     assert len(recovery) == 0
+
+
+def test_error_recovery_accepts_specific_saas_error_envelope():
+    text = (
+        "**Input Error**\n\n"
+        "There was an HTTP 404 error while calling the API. "
+        "API error (404): Project does not exist. "
+        "You may be able to resolve the issue by addressing the concern and trying again."
+    )
+    events = []
+    for i in range(4):
+        req, resp = make_tool_call_pair("sentry_get_issue", {"x": i}, request_id=i + 1)
+        resp.result = {"content": [{"type": "text", "text": text}], "isError": True}
+        events.extend([req, resp])
+
+    evaluator = ComposabilityEvaluator()
+    result = evaluator.evaluate(events, make_server_meta(), EvaluatorConfig())
+    recovery = [f for f in result.findings if f.check_id == "composability.error-recovery-surface"]
+    assert recovery == []
 
 
 def test_programmatic_readiness_prose():

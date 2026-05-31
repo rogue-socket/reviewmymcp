@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 
 from reviewmymcp.evaluators.base import (
@@ -13,6 +14,20 @@ from reviewmymcp.evaluators.base import (
     SkippedCheck,
 )
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
+
+RETRYABILITY_HINTS = ("retry", "try again", "resolve", "verify")
+SPECIFIC_FAILURE_HINTS = (
+    "api error",
+    "does not exist",
+    "invalid",
+    "missing",
+    "not found",
+    "permission",
+    "rate limit",
+    "timeout",
+    "unauthorized",
+    "forbidden",
+)
 
 
 class ComposabilityEvaluator:
@@ -68,21 +83,8 @@ class ComposabilityEvaluator:
 
             text_lower = text.lower().strip()
             is_ambiguous = (
-                len(text_lower) < 20
-                or text_lower in ("error", "failed", "internal error", "something went wrong", "unknown error")
-                or not any(
-                    kw in text_lower
-                    for kw in (
-                        "retry",
-                        "try again",
-                        "invalid",
-                        "missing",
-                        "not found",
-                        "permission",
-                        "timeout",
-                        "rate limit",
-                    )
-                )
+                not _has_retryability_hint(text_lower)
+                and not _has_specific_failure_reason(text_lower)
             )
             if is_ambiguous:
                 ambiguous += 1
@@ -345,3 +347,15 @@ class ComposabilityEvaluator:
                     )
                 )
         return findings
+
+
+def _has_retryability_hint(text: str) -> bool:
+    return any(hint in text for hint in RETRYABILITY_HINTS)
+
+
+def _has_specific_failure_reason(text: str) -> bool:
+    if any(hint in text for hint in SPECIFIC_FAILURE_HINTS):
+        return True
+    if re.search(r"\b(?:http\s*)?\d{3}\b", text):
+        return True
+    return bool(re.search(r"\b(?:parameter|field|argument|input)\s+[`'\"]?[\w.-]+", text))

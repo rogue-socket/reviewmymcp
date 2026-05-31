@@ -2,7 +2,6 @@
 
 from reviewmymcp.evaluators.accuracy.checks import AccuracyEvaluator
 from reviewmymcp.evaluators.base import EvaluatorConfig
-
 from tests.conftest import make_server_meta, make_tool_call_pair, make_tool_def
 
 
@@ -39,6 +38,43 @@ def test_argument_validation_gap():
     result = evaluator.evaluate([req, resp], meta, EvaluatorConfig())
     gaps = [f for f in result.findings if f.check_id == "accuracy.argument-validation-gap"]
     assert len(gaps) == 1
+
+
+def test_error_channel_correctness_detects_error_as_success_content():
+    tool = make_tool_def("fetch_content")
+    meta = make_server_meta([tool])
+    req, resp = make_tool_call_pair(
+        "fetch_content",
+        {"url": "https://example.invalid/missing"},
+        result_content=[{"type": "text", "text": "错误: HTTP 404 - 无法访问网页"}],
+        request_id=1,
+    )
+    resp.result["isError"] = False
+
+    evaluator = AccuracyEvaluator()
+    result = evaluator.evaluate([req, resp], meta, EvaluatorConfig())
+    channel = [f for f in result.findings if f.check_id == "accuracy.error-channel-correctness"]
+
+    assert len(channel) == 1
+    assert channel[0].affected_entity == "fetch_content"
+
+
+def test_error_channel_correctness_ignores_is_error_true():
+    tool = make_tool_def("fetch_content")
+    meta = make_server_meta([tool])
+    req, resp = make_tool_call_pair(
+        "fetch_content",
+        {"url": "https://example.invalid/missing"},
+        result_content=[{"type": "text", "text": "Error: HTTP 404 - unable to access webpage"}],
+        request_id=1,
+    )
+    resp.result["isError"] = True
+
+    evaluator = AccuracyEvaluator()
+    result = evaluator.evaluate([req, resp], meta, EvaluatorConfig())
+    channel = [f for f in result.findings if f.check_id == "accuracy.error-channel-correctness"]
+
+    assert channel == []
 
 
 def test_error_message_quality_generic():

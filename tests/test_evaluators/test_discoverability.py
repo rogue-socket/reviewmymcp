@@ -2,7 +2,6 @@
 
 from reviewmymcp.evaluators.base import EvaluatorConfig
 from reviewmymcp.evaluators.discoverability.checks import DiscoverabilityEvaluator
-
 from tests.conftest import make_server_meta, make_tool_def
 
 
@@ -31,6 +30,18 @@ def test_name_quality_good_name():
     result = evaluator.evaluate([], meta, EvaluatorConfig())
     name_findings = [f for f in result.findings if f.check_id == "discoverability.name-quality"]
     assert len(name_findings) == 0
+
+
+def test_name_quality_allows_unix_idiom_and_analysis_verb():
+    tools = [
+        make_tool_def("whoami", description="Return the authenticated user"),
+        make_tool_def("analyze_issue_with_seer", description="Analyze an issue using Seer"),
+    ]
+    meta = make_server_meta(tools)
+    evaluator = DiscoverabilityEvaluator()
+    result = evaluator.evaluate([], meta, EvaluatorConfig())
+    name_findings = [f for f in result.findings if f.check_id == "discoverability.name-quality"]
+    assert name_findings == []
 
 
 def test_missing_examples_complex_schema():

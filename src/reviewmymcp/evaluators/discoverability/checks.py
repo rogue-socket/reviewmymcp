@@ -15,6 +15,7 @@ from reviewmymcp.evaluators.base import (
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
 VERB_PREFIXES = {
+    "analyze",
     "get",
     "set",
     "create",
@@ -32,8 +33,12 @@ VERB_PREFIXES = {
     "validate",
     "fetch",
     "query",
+    "explain",
     "add",
     "remove",
+    "summarize",
+    "classify",
+    "extract",
     "put",
     "post",
     "patch",
@@ -48,15 +53,23 @@ VERB_PREFIXES = {
     "export",
     "import",
     "generate",
+    "transform",
     "build",
     "parse",
     "format",
     "convert",
+    "compare",
+    "diff",
+    "match",
+    "score",
+    "rank",
+    "predict",
     "move",
     "copy",
 }
 
 CRUD_VERBS = {"create", "get", "read", "list", "update", "patch", "delete", "remove"}
+IDIOMATIC_TOOL_NAMES = {"whoami"}
 
 HTTP_METHOD_PATTERN = re.compile(r"\b(GET|POST|PUT|DELETE|PATCH)\b")
 ENDPOINT_PATTERN = re.compile(r"(?:/api/|endpoint|/v\d+/)")
@@ -101,7 +114,7 @@ class DiscoverabilityEvaluator:
             if len(tool.name) < 4:
                 issues.append("name is too short (<4 chars)")
             parts = re.split(r"[_\-.]", tool.name.lower())
-            has_verb = any(p in VERB_PREFIXES for p in parts)
+            has_verb = tool.name.lower() in IDIOMATIC_TOOL_NAMES or any(p in VERB_PREFIXES for p in parts)
             if not has_verb:
                 issues.append("name contains no recognizable verb")
             if tool.name.isupper() and len(tool.name) > 1:
