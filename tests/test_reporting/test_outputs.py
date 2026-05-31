@@ -7,7 +7,6 @@ from reviewmymcp.reporting.html_report import render_html
 from reviewmymcp.reporting.json_report import render_json
 from reviewmymcp.reporting.sarif_report import render_sarif
 from reviewmymcp.scoring.grader import grade_results
-
 from tests.conftest import make_server_meta
 
 
@@ -52,6 +51,18 @@ def test_json_output_valid():
     assert parsed["total_events"] == 50
     assert parsed["tool_count"] == 10
     assert parsed["call_count"] == 30
+
+
+def test_json_includes_runtime_metadata():
+    report = _make_report()
+    report.server_meta.runtime.reproducible_command = "npx -y ddg-mcp-search@1.1.0"
+    report.server_meta.runtime.package_name = "ddg-mcp-search"
+    report.server_meta.runtime.package_version = "1.1.0"
+
+    parsed = json.loads(render_json(report))
+
+    assert parsed["server_meta"]["runtime"]["reproducible_command"] == "npx -y ddg-mcp-search@1.1.0"
+    assert parsed["server_meta"]["runtime"]["package_version"] == "1.1.0"
 
 
 def test_json_dimension_has_score():
@@ -107,6 +118,18 @@ def test_html_contains_skipped_checks():
     html = render_html(report)
     assert "security.auth-flow" in html
     assert "no HTTP traffic" in html
+
+
+def test_html_includes_runtime_metadata():
+    report = _make_report()
+    report.server_meta.runtime.reproducible_command = "npx -y ddg-mcp-search@1.1.0"
+    report.server_meta.runtime.package_name = "ddg-mcp-search"
+    report.server_meta.runtime.package_version = "1.1.0"
+
+    html = render_html(report)
+
+    assert "npx -y ddg-mcp-search@1.1.0" in html
+    assert "ddg-mcp-search@1.1.0" in html
 
 
 def test_sarif_output_valid():

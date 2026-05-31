@@ -25,6 +25,12 @@
 <div class="meta">
   <p>Server: <strong>{{ report.server_meta.server_name }}</strong> v{{ report.server_meta.server_version }}</p>
   <p>Protocol: {{ report.server_meta.protocol_version }} | Events: {{ report.total_events }} | Sessions: {{ report.total_sessions }}{% if report.tool_count %} | Tools: {{ report.tool_count }}{% endif %}{% if report.call_count %} | Calls: {{ report.call_count }}{% endif %}</p>
+  {% if report.server_meta.auth.scopes_used or report.server_meta.auth.scopes_required %}
+  <p>Auth scopes used: {{ report.server_meta.auth.scopes_used|join(', ') or 'unknown' }}{% if report.server_meta.auth.scopes_required %} | Tools with required scopes: {{ report.server_meta.auth.scopes_required|length }}{% endif %}</p>
+  {% endif %}
+  {% if report.server_meta.runtime.reproducible_command %}
+  <p>Reproduce: <code>{{ report.server_meta.runtime.reproducible_command }}</code>{% if report.server_meta.runtime.package_name and report.server_meta.runtime.package_version %} | Package: {{ report.server_meta.runtime.package_name }}@{{ report.server_meta.runtime.package_version }}{% endif %}</p>
+  {% endif %}
   <p>Date: {{ report.timestamp.strftime('%Y-%m-%d %H:%M UTC') }}</p>
 </div>
 

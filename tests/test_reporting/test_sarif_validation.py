@@ -5,10 +5,9 @@ from pathlib import Path
 
 import jsonschema
 
-from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity, SkippedCheck
+from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity
 from reviewmymcp.reporting.sarif_report import render_sarif
 from reviewmymcp.scoring.grader import grade_results
-
 from tests.conftest import make_server_meta
 
 SARIF_SCHEMA_PATH = Path(__file__).parent.parent / "fixtures" / "sarif-schema-2.1.0.json"

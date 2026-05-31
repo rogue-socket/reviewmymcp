@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 import click
@@ -20,6 +28,7 @@ def _register_evaluators() -> None:
     from reviewmymcp.evaluators.discoverability.checks import DiscoverabilityEvaluator
     from reviewmymcp.evaluators.efficiency.checks import EfficiencyEvaluator
     from reviewmymcp.evaluators.performance.checks import PerformanceEvaluator
+    from reviewmymcp.evaluators.provenance.checks import ProvenanceEvaluator
     from reviewmymcp.evaluators.registry import register
     from reviewmymcp.evaluators.reliability.checks import ReliabilityEvaluator
     from reviewmymcp.evaluators.security.checks import SecurityEvaluator
@@ -34,6 +43,7 @@ def _register_evaluators() -> None:
         ComplianceEvaluator,
         ConformanceEvaluator,
         PerformanceEvaluator,
+        ProvenanceEvaluator,
     ]:
         try:
             register(cls())
@@ -62,6 +72,203 @@ def _build_judge(provider_name: str, model: str):
     return None
 
 
+def _merge_auth_scopes(discovered: list[str], configured: list[str] | tuple[str, ...]) -> list[str]:
+    return sorted({scope for scope in [*discovered, *configured] if scope})
+
+
+PERSISTENCE_ENV_SUFFIXES = (
+    "_FILE_PATH",
+    "_STORAGE_PATH",
+    "_DATA_PATH",
+    "_DB_PATH",
+    "_DATABASE_PATH",
+)
+
+
+def _parse_keyed_paths(values: tuple[str, ...]) -> dict[str, str]:
+    paths: dict[str, str] = {}
+    for value in values:
+        key, sep, path = value.partition("=")
+        if not sep or not key.strip() or not path.strip():
+            raise click.BadParameter("expected KEY=PATH", param_hint="--persistence-path")
+        paths[key.strip()] = path.strip()
+    return paths
+
+
+def _capture_env_persistence_paths() -> dict[str, str]:
+    paths: dict[str, str] = {}
+    for key, value in sorted(os.environ.items()):
+        if value and key.endswith(PERSISTENCE_ENV_SUFFIXES):
+            paths[f"env:{key}"] = value
+    return paths
+
+
+def _resolve_runtime_metadata(command: list[str]):
+    from reviewmymcp.ingest.schema import RuntimeMetadata
+
+    meta = RuntimeMetadata(command=command, reproducible_command=shlex.join(command))
+    if not command:
+        return meta
+
+    executable = shutil.which(command[0])
+    if executable:
+        meta.executable_sha256 = _sha256_file(executable)
+
+    package_spec = _npm_package_spec(command)
+    if package_spec:
+        package_name, requested_version = _split_npm_package_spec(package_spec)
+        if requested_version and _is_exact_npm_version(requested_version):
+            resolved_version = requested_version
+        else:
+            resolved_version = _npm_view_version(package_spec if requested_version else package_name)
+        meta.package_manager = "npm"
+        meta.package_name = package_name
+        meta.package_version = resolved_version
+        if resolved_version:
+            pinned_spec = f"{package_name}@{resolved_version}"
+            meta.reproducible_command = shlex.join(_replace_package_spec(command, package_spec, pinned_spec))
+    return meta
+
+
+def _resolve_npm_provenance(package_name: str):
+    from reviewmymcp.ingest.schema import ProvenanceMetadata
+
+    data = _npm_view_package_json(package_name)
+    provenance = ProvenanceMetadata()
+    if not isinstance(data, dict):
+        return provenance
+
+    repository = data.get("repository")
+    if isinstance(repository, dict):
+        provenance.repository_url = _normalize_repository_url(repository.get("url", ""))
+    elif isinstance(repository, str):
+        provenance.repository_url = _normalize_repository_url(repository)
+    if provenance.repository_url:
+        provenance.source_reachable = _url_reachable(provenance.repository_url)
+
+    license_declared = data.get("license")
+    if isinstance(license_declared, str):
+        provenance.license_declared = license_declared
+
+    publish_times = data.get("time")
+    if isinstance(publish_times, dict):
+        provenance.version_publish_times = [
+            value
+            for key, value in publish_times.items()
+            if key not in {"created", "modified"} and isinstance(value, str)
+        ]
+    return provenance
+
+
+def _npm_package_spec(command: list[str]) -> str:
+    if not command:
+        return ""
+    verb = Path(command[0]).name
+    args = command[1:]
+    if verb == "npm" and args[:1] == ["exec"]:
+        args = args[1:]
+    elif verb not in {"npx", "npm", "pnpm", "yarn", "bunx"}:
+        return ""
+
+    skip_next = False
+    for index, arg in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in {"--package", "-p"} and index + 1 < len(args):
+            return args[index + 1]
+        if arg in {"--yes", "-y", "--quiet"}:
+            continue
+        if arg.startswith("-"):
+            if "=" not in arg:
+                skip_next = arg in {"--cache", "--userconfig", "--registry"}
+            continue
+        return arg
+    return ""
+
+
+def _split_npm_package_spec(spec: str) -> tuple[str, str]:
+    version_sep = spec.rfind("@")
+    if version_sep > 0:
+        return spec[:version_sep], spec[version_sep + 1:]
+    return spec, ""
+
+
+def _is_exact_npm_version(version: str) -> bool:
+    return bool(re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", version))
+
+
+def _replace_package_spec(command: list[str], old: str, new: str) -> list[str]:
+    return [new if part == old else part for part in command]
+
+
+def _npm_view_version(package_name: str) -> str:
+    try:
+        result = subprocess.run(
+            ["npm", "view", package_name, "version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+
+
+def _npm_view_package_json(package_name: str) -> dict:
+    try:
+        result = subprocess.run(
+            ["npm", "view", package_name, "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    if result.returncode != 0:
+        return {}
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _normalize_repository_url(url: str) -> str:
+    normalized = url.strip()
+    if normalized.startswith("git+"):
+        normalized = normalized[4:]
+    if normalized.startswith("git://github.com/"):
+        normalized = normalized.replace("git://github.com/", "https://github.com/", 1)
+    if normalized.endswith(".git"):
+        normalized = normalized[:-4]
+    return normalized
+
+
+def _url_reachable(url: str) -> bool | None:
+    try:
+        request = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status < 400
+    except Exception:
+        return False
+
+
+def _sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError:
+        return ""
+    return digest.hexdigest()
+
+
 @cli.command()
 @click.argument("target", required=False)
 @click.option("--log-file", type=click.Path(exists=True), help="Use captured logs instead of live traffic")
@@ -80,6 +287,11 @@ def _build_judge(provider_name: str, model: str):
 @click.option("--no-llm-judges", is_flag=True, default=False)
 @click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
 @click.option("--judge-model", type=str, default="")
+@click.option("--auth-scope", multiple=True, help="Auth scope present in the audit token; repeat for multiple scopes")
+@click.option("--persistence-path", multiple=True, help="Known persistence location as KEY=PATH; repeat for multiple paths")
+@click.option("--stress", is_flag=True, default=False, help="Run high-volume stress traffic against live stdio targets")
+@click.option("--stress-calls", type=click.IntRange(min=1), default=50, show_default=True)
+@click.option("--stress-duration", type=float, default=30.0, show_default=True)
 def audit(
     target: str | None,
     log_file: str | None,
@@ -93,6 +305,11 @@ def audit(
     no_llm_judges: bool,
     judge_provider: str,
     judge_model: str,
+    auth_scope: tuple[str, ...],
+    persistence_path: tuple[str, ...],
+    stress: bool,
+    stress_calls: int,
+    stress_duration: float,
 ) -> None:
     """Run a full audit on an MCP server or log file."""
     from reviewmymcp.config import AuditConfig
@@ -114,21 +331,51 @@ def audit(
     audit_config.judge.provider = judge_provider
     if judge_model:
         audit_config.judge.model = judge_model
+    cli_persistence_paths = _parse_keyed_paths(persistence_path)
 
     if not log_file and not target:
         click.echo("Error: provide either a target server or --log-file", err=True)
         sys.exit(2)
 
     if log_file:
+        if stress:
+            click.echo("Stress replay mode: evaluating any stress-tagged events in the log; no traffic will be issued.", err=True)
         tp = Transport(transport) if transport else Transport.STDIO
         events = load_file(log_file, transport=tp, redact=not no_redact)
     else:
         import asyncio
 
-        events = asyncio.run(_run_synthetic_audit(target, transport, not no_redact, audit_config))
+        events = asyncio.run(
+            _run_synthetic_audit(
+                target,
+                transport,
+                not no_redact,
+                audit_config,
+                stress=stress,
+                stress_calls=stress_calls,
+                stress_duration=stress_duration,
+            )
+        )
 
     events = correlate(events)
     server_meta = extract_server_meta(events)
+    if not log_file and target:
+        server_meta.runtime = _resolve_runtime_metadata(target.split())
+        if server_meta.runtime.package_manager == "npm" and server_meta.runtime.package_name:
+            server_meta.provenance = _resolve_npm_provenance(server_meta.runtime.package_name)
+    server_meta.auth.scopes_used = _merge_auth_scopes(
+        server_meta.auth.scopes_used,
+        [*audit_config.auth.scopes_used, *auth_scope],
+    )
+    server_meta.persistence.paths = {
+        **_capture_env_persistence_paths(),
+        **audit_config.persistence.paths,
+        **cli_persistence_paths,
+    }
+    server_meta.persistence.working_directory = audit_config.persistence.working_directory
+    server_meta.persistence.package_directory = audit_config.persistence.package_directory
+    if not log_file and not server_meta.persistence.working_directory:
+        server_meta.persistence.working_directory = str(Path.cwd())
     sessions = get_sessions(events)
 
     dim_list = [d.strip() for d in dimensions.split(",")] if dimensions else None
@@ -176,6 +423,11 @@ def audit(
 @click.option("--no-llm-judges", is_flag=True, default=False)
 @click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
 @click.option("--judge-model", type=str, default="")
+@click.option("--auth-scope", multiple=True, help="Auth scope present in the audit token; repeat for multiple scopes")
+@click.option("--persistence-path", multiple=True, help="Known persistence location as KEY=PATH; repeat for multiple paths")
+@click.option("--stress", is_flag=True, default=False, help="Evaluate stress-tagged events in the replay log")
+@click.option("--stress-calls", type=click.IntRange(min=1), default=50, show_default=True)
+@click.option("--stress-duration", type=float, default=30.0, show_default=True)
 def replay(
     log_file: str,
     output_format: str,
@@ -185,6 +437,11 @@ def replay(
     no_llm_judges: bool,
     judge_provider: str,
     judge_model: str,
+    auth_scope: tuple[str, ...],
+    persistence_path: tuple[str, ...],
+    stress: bool,
+    stress_calls: int,
+    stress_duration: float,
 ) -> None:
     """Replay a captured log file through evaluators."""
     from reviewmymcp.evaluators.base import EvaluatorConfig
@@ -195,10 +452,16 @@ def replay(
     from reviewmymcp.scoring.grader import grade_results
 
     _register_evaluators()
+    cli_persistence_paths = _parse_keyed_paths(persistence_path)
+    if stress:
+        click.echo("Stress replay mode: evaluating stress-tagged events already present in the log.", err=True)
+    _ = (stress_calls, stress_duration)
 
     events = load_file(log_file, redact=not no_redact)
     events = correlate(events)
     server_meta = extract_server_meta(events)
+    server_meta.auth.scopes_used = _merge_auth_scopes(server_meta.auth.scopes_used, auth_scope)
+    server_meta.persistence.paths = cli_persistence_paths
     sessions = get_sessions(events)
 
     judge_adapter = None
@@ -586,6 +849,9 @@ async def _run_synthetic_audit(
     transport: str | None,
     redact: bool,
     audit_config,
+    stress: bool = False,
+    stress_calls: int = 50,
+    stress_duration: float = 30.0,
 ) -> list:
     """Run synthetic traffic against a live server and return captured events."""
     from reviewmymcp.ingest.schema import ToolDefinition
@@ -658,6 +924,14 @@ async def _run_synthetic_audit(
 
         click.echo("  Running edge probes...", err=True)
         await driver.execute_edge_probes(tools)
+
+        if stress:
+            click.echo(
+                f"  Stress mode enabled: {stress_calls} calls/tool over {stress_duration:.1f}s. "
+                "This may trigger upstream rate limits.",
+                err=True,
+            )
+            await driver.execute_stress(tools, calls_per_tool=stress_calls, duration_seconds=stress_duration)
 
         click.echo(f"  Captured {len(driver.events)} events.", err=True)
         return driver.events

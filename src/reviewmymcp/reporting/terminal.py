@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.text import Text
 
 from reviewmymcp.evaluators.base import Severity
-from reviewmymcp.scoring.grader import AuditReport, DimensionScore, Grade
+from reviewmymcp.scoring.grader import AuditReport, Grade
 
 GRADE_COLORS = {
     Grade.A: "green",
@@ -40,6 +40,16 @@ def render_report(report: AuditReport, console: Console | None = None) -> None:
         header.append(f"  Tools: {report.tool_count}")
     if report.call_count:
         header.append(f"  Calls: {report.call_count}")
+    if report.server_meta.auth.scopes_used:
+        header.append(f"\nAuth scopes used: {', '.join(report.server_meta.auth.scopes_used)}")
+    if report.server_meta.auth.scopes_required:
+        scoped_tools = len(report.server_meta.auth.scopes_required)
+        header.append(f"\nTools with required scopes: {scoped_tools}")
+    if report.server_meta.runtime.reproducible_command:
+        header.append(f"\nReproduce: {report.server_meta.runtime.reproducible_command}")
+    if report.server_meta.runtime.package_name and report.server_meta.runtime.package_version:
+        runtime = report.server_meta.runtime
+        header.append(f"\nPackage: {runtime.package_name}@{runtime.package_version}")
 
     console.print(Panel(header, title="reviewmymcp", border_style="blue"))
 
