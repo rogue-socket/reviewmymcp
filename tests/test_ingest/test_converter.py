@@ -72,23 +72,48 @@ def test_registry_list_formats():
     assert "python-sdk" in formats
 
 
-def test_claude_desktop_stub():
-    converter = ClaudeDesktopConverter()
-    with pytest.raises(NotImplementedError, match="Claude Desktop"):
-        converter.convert(Path("dummy.json"))
+def test_claude_desktop_embedded_jsonrpc_converter():
+    content = (
+        '2026-01-01T00:00:00Z client -> server {"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}\n'
+        '2026-01-01T00:00:00Z server -> client {"jsonrpc":"2.0","id":1,"result":{"tools":[]}}\n'
+    )
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(content)
+        path = f.name
+
+    try:
+        records = ClaudeDesktopConverter().convert(Path(path))
+        assert len(records) == 2
+        assert records[0]["direction"] == "client_to_server"
+        assert records[1]["direction"] == "server_to_client"
+        assert records[0]["message"]["method"] == "tools/list"
+    finally:
+        Path(path).unlink()
 
 
-def test_python_sdk_stub():
-    converter = PythonSdkConverter()
-    with pytest.raises(NotImplementedError, match="Python MCP SDK"):
-        converter.convert(Path("dummy.json"))
+def test_python_sdk_embedded_jsonrpc_converter():
+    content = (
+        'DEBUG mcp.server received {"message":{"jsonrpc":"2.0","id":2,"method":"initialize","params":{}}}\n'
+        'DEBUG mcp.server sending response {"message":{"jsonrpc":"2.0","id":2,"result":{"serverInfo":{"name":"S"}}}}\n'
+    )
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(content)
+        path = f.name
+
+    try:
+        records = PythonSdkConverter().convert(Path(path))
+        assert len(records) == 2
+        assert records[0]["message"]["method"] == "initialize"
+        assert records[1]["direction"] == "server_to_client"
+    finally:
+        Path(path).unlink()
 
 
 def test_convert_cli_passthrough():
     runner = CliRunner()
     result = runner.invoke(cli, ["convert", str(FIXTURES_DIR / "sample_stdio_log.ndjson")])
     assert result.exit_code == 0
-    lines = [l for l in result.output.strip().split("\n") if l.strip()]
+    lines = [line for line in result.output.strip().split("\n") if line.strip()]
     assert len(lines) > 0
     # Each line should be valid JSON
     for line in lines:
@@ -107,17 +132,23 @@ def test_convert_cli_to_file():
         )
         assert result.exit_code == 0
         content = Path(out_path).read_text()
-        lines = [l for l in content.strip().split("\n") if l.strip()]
+        lines = [line for line in content.strip().split("\n") if line.strip()]
         assert len(lines) > 0
     finally:
         Path(out_path).unlink()
 
 
-def test_convert_cli_stub_format_errors():
-    runner = CliRunner()
-    result = runner.invoke(
-        cli, ["convert", str(FIXTURES_DIR / "sample_stdio_log.ndjson"), "--format", "claude-desktop"]
-    )
-    assert result.exit_code == 2
-    output = (result.output + (result.stderr or "")).lower()
-    assert "does not log" in output or "not yet implemented" in output or "not implemented" in output
+def test_convert_cli_claude_desktop_format():
+    content = 'INFO client -> server {"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}\n'
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(content)
+        path = f.name
+
+    try:
+        runner = CliRunner()
+        result = runner.invoke(cli, ["convert", path, "--format", "claude-desktop"])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output.strip())
+        assert parsed["message"]["method"] == "tools/list"
+    finally:
+        Path(path).unlink()

@@ -67,31 +67,58 @@ class PassthroughConverter:
 
 
 class ClaudeDesktopConverter:
-    """Converter for Claude Desktop MCP log format (stub)."""
+    """Converter for Claude Desktop MCP logs that include embedded JSON-RPC payloads."""
 
     format_name: str = "claude-desktop"
 
     def convert(self, input_path: Path) -> list[dict[str, Any]]:
-        raise NotImplementedError(
-            "Claude Desktop does not log wire-level JSON-RPC traffic. "
-            "Its logs (~/Library/Logs/Claude/mcp.log) contain only operational messages. "
-            "To capture MCP traffic from Claude Desktop, run:\n"
-            "  reviewmymcp watch \"your-server-command\" --output-dir ./logs\n"
-            "then configure Claude Desktop to connect to the proxy."
-        )
+        return _extract_embedded_jsonrpc(input_path)
 
 
 class PythonSdkConverter:
-    """Converter for Python MCP SDK debug log format (stub)."""
+    """Converter for Python MCP SDK debug logs with embedded JSON-RPC payloads."""
 
     format_name: str = "python-sdk"
 
     def convert(self, input_path: Path) -> list[dict[str, Any]]:
-        raise NotImplementedError(
-            "Python MCP SDK log format converter is not yet implemented. "
-            "The Python SDK outputs debug logs to stderr with JSON-RPC payloads. "
-            "For now, extract the JSON-RPC messages and save as NDJSON."
+        return _extract_embedded_jsonrpc(input_path)
+
+
+def _extract_embedded_jsonrpc(input_path: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    decoder = json.JSONDecoder()
+    for line in input_path.read_text(encoding="utf-8").splitlines():
+        payload = _first_json_object(line, decoder)
+        if not payload:
+            continue
+        message = payload.get("message") if isinstance(payload.get("message"), dict) else payload
+        if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+            continue
+        records.append({"direction": _direction_hint(line), "message": message})
+    if not records:
+        raise ValueError(
+            "No embedded JSON-RPC messages found. Use `reviewmymcp watch` to capture wire-level traffic."
         )
+    return records
+
+
+def _first_json_object(line: str, decoder: json.JSONDecoder) -> dict[str, Any] | None:
+    start = line.find("{")
+    while start != -1:
+        try:
+            value, _ = decoder.raw_decode(line[start:])
+        except json.JSONDecodeError:
+            start = line.find("{", start + 1)
+            continue
+        return value if isinstance(value, dict) else None
+    return None
+
+
+def _direction_hint(line: str) -> str:
+    lowered = line.lower()
+    if any(token in lowered for token in ("server -> client", "to client", "sending response", "response")):
+        return "server_to_client"
+    return "client_to_server"
 
 
 def build_registry() -> ConverterRegistry:
