@@ -6,12 +6,11 @@ import json
 from pathlib import Path
 
 import jsonschema
-import pytest
 from click.testing import CliRunner
 
 from reviewmymcp.cli import cli
 from reviewmymcp.evaluators.base import EvaluatorConfig
-from reviewmymcp.evaluators.registry import get_all, register, run_all
+from reviewmymcp.evaluators.registry import register, run_all
 from reviewmymcp.ingest.correlator import correlate, get_sessions
 from reviewmymcp.ingest.file_loader import load_file
 from reviewmymcp.ingest.normalizer import extract_server_meta
@@ -33,13 +32,14 @@ def _register_all():
     from reviewmymcp.evaluators.discoverability.checks import DiscoverabilityEvaluator
     from reviewmymcp.evaluators.efficiency.checks import EfficiencyEvaluator
     from reviewmymcp.evaluators.performance.checks import PerformanceEvaluator
+    from reviewmymcp.evaluators.provenance.checks import ProvenanceEvaluator
     from reviewmymcp.evaluators.reliability.checks import ReliabilityEvaluator
     from reviewmymcp.evaluators.security.checks import SecurityEvaluator
 
     for cls in [
         EfficiencyEvaluator, AccuracyEvaluator, DiscoverabilityEvaluator,
         ComposabilityEvaluator, ReliabilityEvaluator, SecurityEvaluator,
-        ComplianceEvaluator, ConformanceEvaluator, PerformanceEvaluator,
+        ComplianceEvaluator, ConformanceEvaluator, PerformanceEvaluator, ProvenanceEvaluator,
     ]:
         try:
             register(cls())
@@ -77,12 +77,13 @@ class TestEverythingServer:
         assert report.call_count == 20
         assert report.total_events == 68
 
-    def test_all_9_dimensions_scored(self):
+    def test_all_10_dimensions_scored(self):
         report = _full_pipeline(EVERYTHING_LOG)
         dims = {ds.dimension for ds in report.dimension_scores}
         expected = {
             "efficiency", "accuracy", "discoverability", "composability",
             "reliability", "security", "compliance", "conformance", "performance",
+            "provenance",
         }
         assert dims == expected
 
@@ -138,10 +139,11 @@ class TestFilesystemServer:
         assert report.call_count == 19
         assert report.total_events == 44
 
-    def test_all_9_dimensions_scored(self):
+    def test_all_10_dimensions_scored(self):
         report = _full_pipeline(FILESYSTEM_LOG)
         dims = {ds.dimension for ds in report.dimension_scores}
-        assert len(dims) == 9
+        assert len(dims) == 10
+        assert "provenance" in dims
 
     def test_server_meta_populated(self):
         report = _full_pipeline(FILESYSTEM_LOG)

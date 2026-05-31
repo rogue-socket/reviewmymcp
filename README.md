@@ -8,7 +8,7 @@ MCP servers are proliferating faster than quality can keep pace. The protocol is
 
 `reviewmymcp` provides two complementary audit products:
 
-- **`reviewmymcp audit`** — Log-based audit. Ingests captured MCP JSON-RPC traffic, runs 42 deterministic and LLM-judge checks across 9 dimensions, and produces a graded report with numeric scores (0-100) per dimension.
+- **`reviewmymcp audit`** — Log-based audit. Ingests captured MCP JSON-RPC traffic, runs deterministic and LLM-judge checks across 10 dimensions, and produces a graded report with numeric scores (0-100) per dimension.
 - **`reviewmymcp active-audit`** — Active agent-driven usability testing. An LLM agent is placed in front of a live MCP server, given tasks across 6 categories, and its behavioral signals are observed and scored across 5 dimensions.
 
 Both produce independent scored reports. They measure fundamentally different things — protocol quality vs. agent usability.
@@ -183,7 +183,7 @@ Print all available evaluator checks with their dimensions.
 
 ## Evaluation Dimensions
 
-The tool evaluates MCP servers across 9 dimensions with 42 total checks:
+The tool evaluates MCP servers across 10 dimensions with 50+ total checks:
 
 ### Efficiency (5 checks)
 Measures token cost and waste.
@@ -261,6 +261,17 @@ Measures governance and audit readiness.
 | `audit-trail-completeness` | MEDIUM | Orphan requests, missing init handshake |
 | `consent-flow-gaps` | HIGH | Sampling/elicitation without declared capability |
 | `data-residency-signals` | MEDIUM | Unexpected geographic regions in responses |
+
+### Provenance (5 checks)
+Measures source and package artifact trust signals.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `source-reachable` | MEDIUM | Declared repository URL is unreachable |
+| `readme-in-artifact` | INFO | Published artifact lacks a README |
+| `license-in-artifact` | MEDIUM | Declared license text is missing from artifact |
+| `maintenance-recency` | INFO/LOW | Source commit or release is stale |
+| `version-churn` | INFO | Multiple versions published within one hour |
 
 ### Conformance (6 checks)
 Measures MCP protocol spec adherence.
@@ -423,7 +434,7 @@ src/reviewmymcp/
   config.py               # Configuration loading
   ingest/                 # Log ingestion, parsing, normalization, conversion, redaction
   proxy/                  # Stdio and HTTP transparent proxies
-  evaluators/             # 9 dimension subpackages, 42 checks
+  evaluators/             # 10 dimension subpackages, 50+ checks
   scoring/                # Grading engine, report diffing
   reporting/              # Terminal, JSON, HTML, SARIF output
   synthetic/              # Traffic generation, edge probes

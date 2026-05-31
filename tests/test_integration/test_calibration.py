@@ -15,14 +15,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.test_integration.test_real_fixtures import _full_pipeline, _register_all
-
 from reviewmymcp.evaluators.base import EvaluatorConfig
 from reviewmymcp.evaluators.registry import run_all
 from reviewmymcp.ingest.correlator import correlate, get_sessions
 from reviewmymcp.ingest.file_loader import load_file
 from reviewmymcp.ingest.normalizer import extract_server_meta
 from reviewmymcp.scoring.grader import AuditReport, grade_results
+from tests.test_integration.test_real_fixtures import _full_pipeline, _register_all
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -49,7 +48,7 @@ class TestEverythingCalibration:
     """Everything server is the reference MCP implementation — should grade well."""
 
     def test_mostly_a_grades(self):
-        """Good server: no F grades, at least 5 A grades across 9 dimensions."""
+        """Good server: no F grades, at least 5 A grades across 10 dimensions."""
         report = _full_pipeline(FIXTURES / "everything_server.ndjson")
         grades = {ds.dimension: ds.grade for ds in report.dimension_scores}
         a_count = sum(1 for g in grades.values() if g == "A")
@@ -69,7 +68,7 @@ class TestFilesystemCalibration:
     """Filesystem server is a well-built server. Bad paths cause schema-misuse but that's fair."""
 
     def test_mostly_a_grades(self):
-        """Good server: no F grades, at least 4 A grades across 9 dimensions."""
+        """Good server: no F grades, at least 4 A grades across 10 dimensions."""
         report = _full_pipeline(FIXTURES / "filesystem_server.ndjson")
         grades = {ds.dimension: ds.grade for ds in report.dimension_scores}
         a_count = sum(1 for g in grades.values() if g == "A")
