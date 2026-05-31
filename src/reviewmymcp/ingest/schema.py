@@ -55,6 +55,7 @@ class McpEvent(BaseModel):
 
     is_probe: bool = False
     probe_type: str | None = None
+    is_stress: bool = False
 
 
 class ToolDefinition(BaseModel):
@@ -63,8 +64,47 @@ class ToolDefinition(BaseModel):
     name: str
     description: str = ""
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
     annotations: dict[str, Any] = Field(default_factory=dict)
     execution: dict[str, Any] = Field(default_factory=dict)
+    required_scopes: list[str] = Field(default_factory=list)
+
+
+class AuthMetadata(BaseModel):
+    """Authentication envelope observed during the audit run."""
+
+    scopes_used: list[str] = Field(default_factory=list)
+    scopes_required: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class PersistenceMetadata(BaseModel):
+    """Persistence locations known for the audited server."""
+
+    paths: dict[str, str] = Field(default_factory=dict)
+    working_directory: str = ""
+    package_directory: str = ""
+
+
+class RuntimeMetadata(BaseModel):
+    """Runtime command and package resolution details for reproducible audits."""
+
+    command: list[str] = Field(default_factory=list)
+    package_manager: str = ""
+    package_name: str = ""
+    package_version: str = ""
+    reproducible_command: str = ""
+    executable_sha256: str = ""
+
+
+class ProvenanceMetadata(BaseModel):
+    """Supply-chain metadata for the audited server artifact."""
+
+    repository_url: str = ""
+    source_reachable: bool | None = None
+    artifact_files: list[str] = Field(default_factory=list)
+    license_declared: str = ""
+    last_activity_days: int | None = None
+    version_publish_times: list[str] = Field(default_factory=list)
 
 
 class ServerCapabilities(BaseModel):
@@ -134,3 +174,7 @@ class ServerMeta(BaseModel):
     server_capabilities: ServerCapabilities = Field(default_factory=ServerCapabilities)
     client_capabilities: ClientCapabilities = Field(default_factory=ClientCapabilities)
     tools: list[ToolDefinition] = Field(default_factory=list)
+    auth: AuthMetadata = Field(default_factory=AuthMetadata)
+    persistence: PersistenceMetadata = Field(default_factory=PersistenceMetadata)
+    runtime: RuntimeMetadata = Field(default_factory=RuntimeMetadata)
+    provenance: ProvenanceMetadata = Field(default_factory=ProvenanceMetadata)

@@ -48,6 +48,7 @@ def normalize_event(
         raw_size_bytes=len(json.dumps(raw).encode()),
         raw_message=raw,
     )
+    event.is_stress = bool(raw.get("is_stress", False))
 
     if http_metadata:
         event.http_method = http_metadata.get("http_method")
@@ -96,6 +97,13 @@ def extract_server_meta(events: list[McpEvent]) -> ServerMeta:
     tools = extract_tool_definitions(events)
     if tools:
         meta.tools = tools
+        meta.auth.scopes_required = {
+            tool.name: tool.required_scopes for tool in tools if tool.required_scopes
+        }
+
+    scopes_used = extract_auth_scopes_used(events)
+    if scopes_used:
+        meta.auth.scopes_used = scopes_used
 
     return meta
 
@@ -120,8 +128,68 @@ def extract_tool_definitions(events: list[McpEvent]) -> list[ToolDefinition]:
                         name=name,
                         description=raw_tool.get("description", ""),
                         input_schema=raw_tool.get("inputSchema", {}),
+                        output_schema=raw_tool.get("outputSchema", {}),
                         annotations=raw_tool.get("annotations", {}),
                         execution=raw_tool.get("execution", {}),
+                        required_scopes=_extract_required_scopes(raw_tool),
                     )
                 )
     return tools
+
+
+def extract_auth_scopes_used(events: list[McpEvent]) -> list[str]:
+    """Extract observed auth scopes from metadata-bearing responses when available."""
+    scopes: set[str] = set()
+    for event in events:
+        if not (event.is_response and event.result and not event.is_error):
+            continue
+        scopes.update(_find_scope_list(event.result))
+    return sorted(scopes)
+
+
+def _extract_required_scopes(raw_tool: dict[str, Any]) -> list[str]:
+    annotations = raw_tool.get("annotations")
+    if not isinstance(annotations, dict):
+        annotations = {}
+    meta = raw_tool.get("_meta")
+    if not isinstance(meta, dict):
+        meta = {}
+
+    scope_values = (
+        raw_tool.get("requiredScopes")
+        or raw_tool.get("required_scopes")
+        or annotations.get("requiredScopes")
+        or annotations.get("required_scopes")
+        or meta.get("requiredScopes")
+        or meta.get("required_scopes")
+        or []
+    )
+    return _normalize_scope_list(scope_values)
+
+
+def _find_scope_list(value: Any) -> set[str]:
+    if not isinstance(value, dict):
+        return set()
+
+    scopes: set[str] = set()
+    auth = value.get("auth")
+    if isinstance(auth, dict):
+        for key in ("scopes_used", "scopesUsed", "scopes"):
+            scopes.update(_normalize_scope_list(auth.get(key)))
+
+    meta = value.get("_meta")
+    if isinstance(meta, dict):
+        scopes.update(_find_scope_list(meta))
+
+    for key in ("scopes_used", "scopesUsed"):
+        scopes.update(_normalize_scope_list(value.get(key)))
+
+    return scopes
+
+
+def _normalize_scope_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return sorted({item for item in value if isinstance(item, str) and item})
+    return []

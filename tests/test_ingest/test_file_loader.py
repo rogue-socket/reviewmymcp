@@ -63,6 +63,22 @@ def test_load_with_wrapper_object():
     Path(path).unlink()
 
 
+def test_load_with_stress_flag():
+    line = json.dumps({
+        "direction": "client_to_server",
+        "is_stress": True,
+        "message": {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search"}},
+    })
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
+        f.write(line)
+        path = f.name
+
+    events = load_file(path, redact=False)
+    assert events[0].is_stress is True
+
+    Path(path).unlink()
+
+
 def test_load_with_timestamp_parsing():
     line = json.dumps({
         "jsonrpc": "2.0",

@@ -52,6 +52,7 @@ def make_event(
     task_id: str | None = None,
     is_probe: bool = False,
     probe_type: str | None = None,
+    is_stress: bool = False,
 ) -> McpEvent:
     return McpEvent(
         event_id=event_id or _next_id(),
@@ -76,6 +77,7 @@ def make_event(
         task_id=task_id,
         is_probe=is_probe,
         probe_type=probe_type,
+        is_stress=is_stress,
     )
 
 
@@ -90,6 +92,7 @@ def make_tool_call_pair(
     request_id: int = 1,
     is_probe: bool = False,
     probe_type: str | None = None,
+    is_stress: bool = False,
 ) -> tuple[McpEvent, McpEvent]:
     base = base_time or datetime.now(UTC)
     req_eid = str(uuid4())
@@ -104,6 +107,7 @@ def make_tool_call_pair(
         timestamp=base,
         is_probe=is_probe,
         probe_type=probe_type,
+        is_stress=is_stress,
     )
 
     if result_content is None:
@@ -123,6 +127,7 @@ def make_tool_call_pair(
         direction=Direction.SERVER_TO_CLIENT,
         is_probe=is_probe,
         probe_type=probe_type,
+        is_stress=is_stress,
     )
 
     return req, resp
@@ -212,9 +217,19 @@ def make_tool_def(
     description: str = "A test tool",
     properties: dict | None = None,
     required: list[str] | None = None,
+    output_schema: dict | None = None,
+    annotations: dict | None = None,
+    required_scopes: list[str] | None = None,
 ) -> ToolDefinition:
     schema = {"type": "object", "properties": properties or {}, "required": required or []}
-    return ToolDefinition(name=name, description=description, input_schema=schema)
+    return ToolDefinition(
+        name=name,
+        description=description,
+        input_schema=schema,
+        output_schema=output_schema or {},
+        annotations=annotations or {},
+        required_scopes=required_scopes or [],
+    )
 
 
 @pytest.fixture
