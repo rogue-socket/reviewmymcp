@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from reviewmymcp.evaluators.base import (
     EvaluatorConfig,
@@ -38,6 +39,33 @@ INJECTION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"<\|im_start\|>system", re.IGNORECASE),
 ]
 
+SAFETY_LANGUAGE = (
+    "allowlist",
+    "allow-listed",
+    "allow listed",
+    "authenticated to a single host",
+    "confirmation",
+    "confirm",
+    "fixed host",
+    "restricted",
+    "safe",
+    "sandbox",
+    "sandboxed",
+    "single host",
+)
+NETWORK_RISK_TERMS = ("url", "uri", "http", "request", "fetch", "download", "crawl", "scrape", "webhook")
+FILE_RISK_TERMS = ("file", "path", "attachment", "read", "write", "delete", "upload", "download")
+SSRF_BLOCK_TERMS = (
+    "blocked",
+    "disallowed",
+    "not allowed",
+    "forbidden url",
+    "private ip blocked",
+    "private network",
+    "file scheme",
+    "unsupported scheme",
+)
+
 
 class SecurityEvaluator:
     dimension: str = "security"
@@ -54,7 +82,10 @@ class SecurityEvaluator:
         findings.extend(self._check_secret_leakage(events))
         findings.extend(self._check_auth_flow(events))
         findings.extend(self._check_scope_creep(events, server_meta))
-        findings.extend(self._check_excessive_permissions(server_meta))
+        ssrf_findings = self._check_ssrf_unblocked(events)
+        findings.extend(ssrf_findings)
+        ssrf_tools = {finding.affected_entity for finding in ssrf_findings if finding.affected_entity}
+        findings.extend(self._check_excessive_permissions(server_meta, ssrf_tools))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -63,7 +94,9 @@ class SecurityEvaluator:
                 "security.secret-leakage",
                 "security.auth-flow-correctness",
                 "security.scope-creep",
+                "security.ssrf-unblocked",
                 "security.excessive-permissions",
+                "security.network-access-warning",
             ],
             findings=findings,
             checks_skipped=skipped,
@@ -151,6 +184,58 @@ class SecurityEvaluator:
                         affected_entity=tool_name,
                     ))
 
+        return findings
+
+    def _check_ssrf_unblocked(self, events: list[McpEvent]) -> list[Finding]:
+        requests = {
+            event.event_id: event
+            for event in events
+            if event.is_request
+            and event.method == "tools/call"
+            and event.is_probe
+            and event.probe_type == "ssrf_url_filtering"
+        }
+        findings: list[Finding] = []
+        seen: set[tuple[str, str]] = set()
+
+        for response in events:
+            if not (
+                response.is_response
+                and response.request_event_id in requests
+                and response.is_probe
+                and response.probe_type == "ssrf_url_filtering"
+            ):
+                continue
+
+            request = requests[response.request_event_id]
+            tool_name = request.params.get("name", "unknown") if request.params else "unknown"
+            arguments = request.params.get("arguments", {}) if request.params else {}
+            target = _first_url_argument(arguments)
+            if not target or _is_explicitly_blocked(response):
+                continue
+
+            key = (tool_name, target)
+            if key in seen:
+                continue
+            seen.add(key)
+            severity = Severity.CRITICAL if "169.254.169.254" in target else Severity.HIGH
+            findings.append(
+                Finding(
+                    check_id="security.ssrf-unblocked",
+                    severity=severity,
+                    title=f"Tool `{tool_name}` did not block SSRF probe target",
+                    description=(
+                        f"The SSRF probe target `{target}` did not produce an explicit blocked/disallowed URL response."
+                    ),
+                    evidence={
+                        "tool": tool_name,
+                        "target": target,
+                        "response": _response_text(response)[:300],
+                    },
+                    remediation="Block localhost, private ranges, cloud metadata IPs, and non-HTTP schemes before fetching URLs.",
+                    affected_entity=tool_name,
+                )
+            )
         return findings
 
     def _check_secret_leakage(self, events: list[McpEvent]) -> list[Finding]:
@@ -275,21 +360,23 @@ class SecurityEvaluator:
                 )
         return findings
 
-    def _check_excessive_permissions(self, server_meta: ServerMeta) -> list[Finding]:
+    def _check_excessive_permissions(
+        self,
+        server_meta: ServerMeta,
+        suppress_network_tools: set[str] | None = None,
+    ) -> list[Finding]:
         findings: list[Finding] = []
-        dangerous_patterns = [
+        suppress_network_tools = suppress_network_tools or set()
+        direct_patterns = [
             (r"execut|shell|command|bash|cmd|terminal|subprocess", "arbitrary command execution"),
-            (r"file.*system|read.*file|write.*file|delete.*file|rm\s", "file system access"),
-            (r"network|http|request|fetch|curl|wget", "arbitrary network access"),
             (r"database|sql|query.*db|drop\s+table", "database access"),
         ]
 
         for tool in server_meta.tools:
             text = f"{tool.name} {tool.description}".lower()
-            for pattern, risk in dangerous_patterns:
+            for pattern, risk in direct_patterns:
                 if re.search(pattern, text):
-                    has_confirmation = any(kw in text for kw in ("confirm", "approve", "sandbox", "restricted", "safe"))
-                    if not has_confirmation:
+                    if not _has_safety_language(text):
                         findings.append(
                             Finding(
                                 check_id="security.excessive-permissions",
@@ -302,4 +389,91 @@ class SecurityEvaluator:
                             )
                         )
                     break
+            else:
+                network_terms = [term for term in NETWORK_RISK_TERMS if term in text]
+                file_terms = [term for term in FILE_RISK_TERMS if term in text]
+                execution = tool.execution or {}
+                user_controlled_url = bool(execution.get("user_controlled_url") or execution.get("dereferences_user_url"))
+                user_controlled_path = bool(execution.get("user_controlled_path") or execution.get("dereferences_user_path"))
+
+                if tool.name in suppress_network_tools and (user_controlled_url or len(network_terms) >= 2):
+                    continue
+                if user_controlled_url and not execution.get("url_filtering"):
+                    findings.append(
+                        _network_access_finding(tool.name, "unfiltered user-controlled URL access", Severity.MEDIUM)
+                    )
+                    continue
+                elif user_controlled_path and not execution.get("path_filtering"):
+                    risk = "unfiltered user-controlled path access"
+                elif len(network_terms) >= 2 and not _has_safety_language(text):
+                    findings.append(_network_access_finding(tool.name, "description-only network access", Severity.LOW))
+                    continue
+                elif len(file_terms) >= 2 and not _has_safety_language(text):
+                    risk = "file system access"
+                else:
+                    continue
+
+                findings.append(
+                    Finding(
+                        check_id="security.excessive-permissions",
+                        severity=Severity.MEDIUM,
+                        title=f"Tool `{tool.name}` indicates {risk} without safeguards",
+                        description=f"Tool description suggests {risk} capability with no mention of sandboxing or confirmation.",
+                        evidence={"tool": tool.name, "risk": risk},
+                        remediation="Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+                        affected_entity=tool.name,
+                    )
+                )
         return findings
+
+
+def _has_safety_language(text: str) -> bool:
+    return any(phrase in text for phrase in SAFETY_LANGUAGE)
+
+
+def _first_url_argument(value: Any) -> str:
+    if isinstance(value, str) and value.startswith(("http://", "https://", "file://")):
+        return value
+    if isinstance(value, dict):
+        for nested in value.values():
+            found = _first_url_argument(nested)
+            if found:
+                return found
+    if isinstance(value, list):
+        for nested in value:
+            found = _first_url_argument(nested)
+            if found:
+                return found
+    return ""
+
+
+def _is_explicitly_blocked(response: McpEvent) -> bool:
+    text = _response_text(response).lower()
+    return bool(text) and any(term in text for term in SSRF_BLOCK_TERMS)
+
+
+def _response_text(response: McpEvent) -> str:
+    parts: list[str] = []
+    if response.error:
+        message = response.error.get("message")
+        if isinstance(message, str):
+            parts.append(message)
+    if response.result:
+        content = response.result.get("content", [])
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+    return "\n".join(parts)
+
+
+def _network_access_finding(tool_name: str, risk: str, severity: Severity) -> Finding:
+    return Finding(
+        check_id="security.network-access-warning",
+        severity=severity,
+        title=f"Tool `{tool_name}` appears to accept user-controlled network targets",
+        description="Tool name or description suggests network access, but no active SSRF probe result is available.",
+        evidence={"tool": tool_name, "risk": risk},
+        remediation="Use active SSRF probes where possible, and document URL scheme, host, and private-network filtering.",
+        affected_entity=tool_name,
+    )

@@ -2,8 +2,7 @@
 
 from reviewmymcp.evaluators.base import EvaluatorConfig
 from reviewmymcp.evaluators.security.checks import SecurityEvaluator
-from reviewmymcp.ingest.schema import ClientCapabilities, ServerCapabilities
-
+from reviewmymcp.ingest.schema import ClientCapabilities
 from tests.conftest import make_event, make_server_meta, make_tool_call_pair, make_tool_def
 
 
@@ -105,3 +104,90 @@ def test_no_excessive_permissions_with_sandbox():
     result = evaluator.evaluate([], meta, EvaluatorConfig())
     perms = [f for f in result.findings if f.check_id == "security.excessive-permissions"]
     assert len(perms) == 0
+
+
+def test_network_access_warning_for_description_only_url_fetcher():
+    tool = make_tool_def("fetch_content", description="Fetch and return content from any user-provided URL")
+    meta = make_server_meta([tool])
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([], meta, EvaluatorConfig())
+    warnings = [f for f in result.findings if f.check_id == "security.network-access-warning"]
+    perms = [f for f in result.findings if f.check_id == "security.excessive-permissions"]
+    assert len(warnings) == 1
+    assert warnings[0].severity.value == "low"
+    assert warnings[0].evidence["risk"] == "description-only network access"
+    assert perms == []
+
+
+def test_ssrf_unblocked_probe_flags_metadata_target_critical():
+    req, resp = make_tool_call_pair(
+        "fetch_content",
+        {"url": "http://169.254.169.254/latest/meta-data/"},
+        result_content=[{"type": "text", "text": "ami-id: ami-123"}],
+        is_probe=True,
+        probe_type="ssrf_url_filtering",
+    )
+
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([req, resp], make_server_meta(), EvaluatorConfig())
+    ssrf = [f for f in result.findings if f.check_id == "security.ssrf-unblocked"]
+
+    assert len(ssrf) == 1
+    assert ssrf[0].severity.value == "critical"
+    assert ssrf[0].affected_entity == "fetch_content"
+
+
+def test_ssrf_unblocked_probe_ignores_explicit_block():
+    req, resp = make_tool_call_pair(
+        "fetch_content",
+        {"url": "http://127.0.0.1:1/"},
+        result_content=[{"type": "text", "text": "Blocked: private network URLs are not allowed"}],
+        is_probe=True,
+        probe_type="ssrf_url_filtering",
+    )
+    resp.result["isError"] = True
+
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([req, resp], make_server_meta(), EvaluatorConfig())
+    ssrf = [f for f in result.findings if f.check_id == "security.ssrf-unblocked"]
+
+    assert ssrf == []
+
+
+def test_ssrf_unblocked_suppresses_network_access_warning_for_same_tool():
+    tool = make_tool_def("fetch_content", description="Fetch and return content from any user-provided URL")
+    req, resp = make_tool_call_pair(
+        "fetch_content",
+        {"url": "http://127.0.0.1:1/"},
+        result_content=[{"type": "text", "text": "connect ECONNREFUSED 127.0.0.1"}],
+        is_probe=True,
+        probe_type="ssrf_url_filtering",
+    )
+
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([req, resp], make_server_meta([tool]), EvaluatorConfig())
+    ids = [f.check_id for f in result.findings]
+
+    assert "security.ssrf-unblocked" in ids
+    assert "security.network-access-warning" not in ids
+
+
+def test_excessive_permissions_allows_single_host_saas_urls():
+    tool = make_tool_def(
+        "find_dsns",
+        description=(
+            "Find Sentry DSNs for a project using regionUrl as a datacenter selector. "
+            "Requests are authenticated to a single host at https://*.sentry.io/api/0/."
+        ),
+    )
+    meta = make_server_meta([tool])
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([], meta, EvaluatorConfig())
+    perms = [f for f in result.findings if f.check_id == "security.excessive-permissions"]
+    assert perms == []
+
+
+def test_checks_run_includes_network_access_warning():
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([], make_server_meta(), EvaluatorConfig())
+    assert "security.network-access-warning" in result.checks_run
