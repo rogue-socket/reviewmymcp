@@ -24,36 +24,36 @@ SCENARIOS = [
         ],
     },
     {
-        "name": "add_arithmetic_edge_cases",
+        "name": "get_sum_arithmetic_edge_cases",
         "description": "Arithmetic with edge cases including type confusion",
         "steps": [
-            {"tool": "add", "arguments": {"a": 1, "b": 2}},
-            {"tool": "add", "arguments": {"a": 0, "b": 0}},
-            {"tool": "add", "arguments": {"a": -5, "b": 3}},
-            {"tool": "add", "arguments": {"a": 1.5, "b": 2.7}},
-            {"tool": "add", "arguments": {"a": 999999999, "b": 999999999}},
-            {"tool": "add", "arguments": {"a": "5", "b": "3"}},
+            {"tool": "get-sum", "arguments": {"a": 1, "b": 2}},
+            {"tool": "get-sum", "arguments": {"a": 0, "b": 0}},
+            {"tool": "get-sum", "arguments": {"a": -5, "b": 3}},
+            {"tool": "get-sum", "arguments": {"a": 1.5, "b": 2.7}},
+            {"tool": "get-sum", "arguments": {"a": 999999999, "b": 999999999}},
+            {"tool": "get-sum", "arguments": {"a": "5", "b": "3"}},
         ],
     },
     {
         "name": "long_running_operation",
         "description": "Long-running op to capture progress notifications",
         "steps": [
-            {"tool": "longRunningOperation", "arguments": {"duration": 3, "steps": 5}},
+            {"tool": "trigger-long-running-operation", "arguments": {"duration": 3, "steps": 5}},
         ],
     },
     {
         "name": "sample_llm_trigger",
-        "description": "Trigger sampleLLM to produce orphaned sampling callback",
+        "description": "Trigger sampling request to produce orphaned sampling callback",
         "steps": [
-            {"tool": "sampleLLM", "arguments": {"prompt": "Say hello", "maxTokens": 50}},
+            {"tool": "trigger-sampling-request", "arguments": {"prompt": "Say hello", "maxTokens": 50}},
         ],
     },
     {
         "name": "get_tiny_image",
         "description": "Retrieve binary-ish content to test response variety",
         "steps": [
-            {"tool": "getTinyImage", "arguments": {}},
+            {"tool": "get-tiny-image", "arguments": {}},
         ],
     },
 ]
