@@ -8,7 +8,6 @@ from reviewmymcp.active.agent_loop import AgentLoop
 from reviewmymcp.active.models import ActiveTask, BehavioralSignal, TaskCategory
 from reviewmymcp.ingest.schema import ToolDefinition
 from reviewmymcp.judge.base import AgentToolCall, AgentTurnResponse
-
 from tests.test_active.conftest import MockAgentProvider, MockCallTool
 
 
@@ -55,6 +54,11 @@ async def test_single_tool_call_then_stop():
     assert result.outcome == "success"
     assert len(mock_tool.calls) == 1
     assert mock_tool.calls[0][0] == "search"
+    second_turn_messages = agent.calls[1]["messages"]
+    tool_result_message = second_turn_messages[-1]
+    assert tool_result_message["role"] == "user"
+    assert tool_result_message["content"][0]["type"] == "tool_result"
+    assert tool_result_message["content"][0]["tool_use_id"] == "c1"
     assert BehavioralSignal.TOOL_FOUND in result.signals
     assert BehavioralSignal.CHOSE_TO_STOP in result.signals
 
@@ -185,8 +189,6 @@ async def test_tool_not_found():
         ),
         AgentTurnResponse(text="That tool doesn't exist.", stop_reason="end_turn"),
     ])
-    mock_tool = MockCallTool(results={"nonexistent": None})
-
     async def tool_fn(name, args):
         return None  # timeout / not found
 
@@ -194,3 +196,41 @@ async def test_tool_not_found():
     result = await loop.execute_task(_make_task())
 
     assert BehavioralSignal.TOOL_NOT_FOUND in result.signals
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_becomes_gave_up_trace():
+    class FailingProvider:
+        provider_name = "failing"
+
+        async def agent_turn(self, messages, tools, system="", max_tokens=4096):
+            raise RuntimeError("provider unavailable")
+
+    loop = AgentLoop(agent_provider=FailingProvider(), call_tool_fn=MockCallTool(), tools=_make_tools())
+    result = await loop.execute_task(_make_task())
+
+    assert result.total_turns == 1
+    assert result.turns[0].stop_reason == "provider_error"
+    assert result.outcome == "gave_up"
+    assert BehavioralSignal.GAVE_UP in result.signals
+
+
+@pytest.mark.asyncio
+async def test_tool_call_exception_is_recorded_as_attempt_error():
+    agent = MockAgentProvider([
+        AgentTurnResponse(
+            tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
+            stop_reason="tool_use",
+        ),
+        AgentTurnResponse(text="I cannot continue after the tool failed.", stop_reason="end_turn"),
+    ])
+
+    async def failing_tool(name, args):
+        raise RuntimeError("server disconnected")
+
+    loop = AgentLoop(agent_provider=agent, call_tool_fn=failing_tool, tools=_make_tools())
+    result = await loop.execute_task(_make_task())
+
+    attempt = result.turns[0].tool_calls[0]
+    assert attempt.is_error is True
+    assert attempt.result == {"error": "tool call failed: server disconnected"}

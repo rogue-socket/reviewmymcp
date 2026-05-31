@@ -7,14 +7,12 @@ from typing import Any
 from reviewmymcp.active.models import (
     ActiveTask,
     AgentTurn,
-    BehavioralSignal,
     TaskExecution,
     ToolCallAttempt,
 )
 from reviewmymcp.active.signal_extractor import determine_outcome, extract_task_signals
 from reviewmymcp.ingest.schema import ToolDefinition
 from reviewmymcp.judge.base import AgentProvider
-
 
 AGENT_SYSTEM = """\
 You are an AI agent testing an MCP (Model Context Protocol) server. \
@@ -49,11 +47,21 @@ class AgentLoop:
         turns: list[AgentTurn] = []
 
         for turn_num in range(1, self._max_turns + 1):
-            response = await self._agent.agent_turn(
-                messages=messages,
-                tools=llm_tools,
-                system=AGENT_SYSTEM,
-            )
+            try:
+                response = await self._agent.agent_turn(
+                    messages=messages,
+                    tools=llm_tools,
+                    system=AGENT_SYSTEM,
+                )
+            except Exception as exc:
+                turns.append(
+                    AgentTurn(
+                        turn_number=turn_num,
+                        text_response=f"Cannot continue: agent provider error: {exc}",
+                        stop_reason="provider_error",
+                    )
+                )
+                break
 
             turn = AgentTurn(
                 turn_number=turn_num,
@@ -75,7 +83,10 @@ class AgentLoop:
                     call_id=tc.call_id,
                 )
 
-                result = await self._call_tool(tc.tool_name, tc.arguments)
+                try:
+                    result = await self._call_tool(tc.tool_name, tc.arguments)
+                except Exception as exc:
+                    result = {"error": f"tool call failed: {exc}"}
                 if result is None:
                     attempt.is_error = True
                     attempt.result = {"error": "timeout or connection error"}
