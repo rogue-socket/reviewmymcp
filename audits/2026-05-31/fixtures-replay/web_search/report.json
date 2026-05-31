@@ -1,0 +1,314 @@
+{
+  "server_meta": {
+    "server_name": "web-search",
+    "server_version": "0.1.0",
+    "protocol_version": "2024-11-05",
+    "instructions": "",
+    "server_capabilities": {
+      "logging": false,
+      "prompts": false,
+      "prompts_list_changed": false,
+      "resources": false,
+      "resources_subscribe": false,
+      "resources_list_changed": false,
+      "tools": true,
+      "tools_list_changed": false,
+      "tasks": false,
+      "tasks_list": false,
+      "tasks_cancel": false,
+      "raw": {
+        "tools": {}
+      }
+    },
+    "client_capabilities": {
+      "roots": true,
+      "sampling": true,
+      "elicitation_form": false,
+      "elicitation_url": false,
+      "tasks": false,
+      "raw": {
+        "roots": {
+          "listChanged": true
+        },
+        "sampling": {}
+      }
+    },
+    "tools": [
+      {
+        "name": "search",
+        "description": "Search the web using Google (no API key required)",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum number of results to return (default: 5)",
+              "minimum": 1,
+              "maximum": 10
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {},
+        "required_scopes": []
+      }
+    ],
+    "auth": {
+      "scopes_used": [],
+      "scopes_required": {}
+    },
+    "persistence": {
+      "paths": {},
+      "working_directory": "",
+      "package_directory": ""
+    },
+    "runtime": {
+      "command": [],
+      "package_manager": "",
+      "package_name": "",
+      "package_version": "",
+      "reproducible_command": "",
+      "executable_sha256": ""
+    },
+    "provenance": {
+      "repository_url": "",
+      "source_reachable": null,
+      "artifact_files": [],
+      "license_declared": "",
+      "last_activity_days": null,
+      "version_publish_times": []
+    }
+  },
+  "dimension_scores": [
+    {
+      "dimension": "efficiency",
+      "score": 90.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "efficiency.redundant-calls",
+          "severity": "medium",
+          "title": "Tool `search` called 3 times with identical arguments",
+          "description": "In session main-web_search, same call repeated 3 times.",
+          "evidence": {
+            "tool": "search",
+            "count": 3,
+            "session": "main-web_search"
+          },
+          "remediation": "Consider caching, or use a resource instead of repeated tool calls.",
+          "affected_entity": "search"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "accuracy",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "accuracy.description-accuracy",
+          "reason": "LLM judge not enabled"
+        }
+      ]
+    },
+    {
+      "dimension": "discoverability",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "discoverability.description-clarity",
+          "reason": "LLM judge not enabled"
+        },
+        {
+          "check_id": "discoverability.semantic-overlap",
+          "reason": "LLM judge not enabled"
+        }
+      ]
+    },
+    {
+      "dimension": "composability",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "composability.idempotency-violation",
+          "reason": "fewer than 2 repeated call groups with 2+ successes (10 group(s) skipped)"
+        },
+        {
+          "check_id": "composability.concurrency-safety",
+          "reason": "skipped 1 tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each"
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "score": 84.2,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "reliability.silent-failure-suspect",
+          "severity": "high",
+          "title": "Tool `search` returns success-shaped empty payloads",
+          "description": "13 of 13 successful responses were default-shaped empty payloads with no explicit errors.",
+          "evidence": {
+            "tool": "search",
+            "empty_count": 13,
+            "total": 13,
+            "empty_rate": 1.0,
+            "max_empty_streak": 13
+          },
+          "remediation": "Return explicit tool errors for upstream failures, and distinguish true empty results from fallback failures.",
+          "affected_entity": "search"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "security",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "compliance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "compliance.data-residency-signals",
+          "reason": "no expected_regions configured"
+        }
+      ]
+    },
+    {
+      "dimension": "conformance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "performance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "performance.concurrent-session-scaling",
+          "reason": "insufficient low-concurrency or high-concurrency samples (need >= 3 each)"
+        },
+        {
+          "check_id": "performance.throughput-degradation",
+          "reason": "need >= 20 tool/call responses, only 13 found"
+        }
+      ]
+    },
+    {
+      "dimension": "provenance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    }
+  ],
+  "top_findings": [
+    {
+      "check_id": "reliability.silent-failure-suspect",
+      "severity": "high",
+      "title": "Tool `search` returns success-shaped empty payloads",
+      "description": "13 of 13 successful responses were default-shaped empty payloads with no explicit errors.",
+      "evidence": {
+        "tool": "search",
+        "empty_count": 13,
+        "total": 13,
+        "empty_rate": 1.0,
+        "max_empty_streak": 13
+      },
+      "remediation": "Return explicit tool errors for upstream failures, and distinguish true empty results from fallback failures.",
+      "affected_entity": "search"
+    },
+    {
+      "check_id": "efficiency.redundant-calls",
+      "severity": "medium",
+      "title": "Tool `search` called 3 times with identical arguments",
+      "description": "In session main-web_search, same call repeated 3 times.",
+      "evidence": {
+        "tool": "search",
+        "count": 3,
+        "session": "main-web_search"
+      },
+      "remediation": "Consider caching, or use a resource instead of repeated tool calls.",
+      "affected_entity": "search"
+    }
+  ],
+  "total_events": 91,
+  "total_sessions": 4,
+  "tool_count": 1,
+  "call_count": 35,
+  "timestamp": "2026-05-31T20:48:17.196129Z"
+}
