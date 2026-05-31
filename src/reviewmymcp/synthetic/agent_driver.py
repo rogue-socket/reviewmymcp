@@ -11,7 +11,7 @@ from uuid import uuid4
 from reviewmymcp.ingest.normalizer import normalize_event
 from reviewmymcp.ingest.redactor import redact_dict
 from reviewmymcp.ingest.schema import Direction, McpEvent, Transport
-from reviewmymcp.synthetic.edge_probes import generate_edge_probes
+from reviewmymcp.synthetic.edge_probes import _default_args, generate_edge_probes
 
 
 class StdioAgentDriver:
@@ -33,6 +33,7 @@ class StdioAgentDriver:
         self._pending: dict[int, asyncio.Future] = {}
         self._probe_context: str | None = None
         self._probe_rids: dict[int | str, str] = {}
+        self._stress_context = False
 
     @property
     def events(self) -> list[McpEvent]:
@@ -90,6 +91,38 @@ class StdioAgentDriver:
             results.append({"tool": tool, "arguments": args, "result": result})
         return results
 
+    async def execute_stress(
+        self,
+        tools: list[Any],
+        calls_per_tool: int = 50,
+        duration_seconds: float = 30.0,
+    ) -> list[dict[str, Any]]:
+        from reviewmymcp.ingest.schema import ToolDefinition
+
+        tool_defs = []
+        for tool in tools:
+            if isinstance(tool, ToolDefinition):
+                tool_defs.append(tool)
+            elif isinstance(tool, dict):
+                tool_defs.append(ToolDefinition(**tool))
+
+        if not tool_defs or calls_per_tool <= 0:
+            return []
+
+        interval = duration_seconds / calls_per_tool if duration_seconds > 0 else 0
+        results = []
+        self._stress_context = True
+        try:
+            for idx in range(calls_per_tool):
+                for tool in tool_defs:
+                    result = await self.call_tool(tool.name, _default_args(tool, idx))
+                    results.append({"tool": tool.name, "result": result})
+                if interval > 0 and idx < calls_per_tool - 1:
+                    await asyncio.sleep(interval)
+        finally:
+            self._stress_context = False
+        return results
+
     async def execute_edge_probes(self, tools: list[Any]) -> list[dict[str, Any]]:
         from reviewmymcp.ingest.schema import ToolDefinition
 
@@ -103,20 +136,19 @@ class StdioAgentDriver:
         probes = generate_edge_probes(tool_defs)
         results = []
 
-        for probe in probes:
-            self._probe_context = probe["probe_type"]
-            try:
-                req = probe["request"]
-                method = req.get("method")
-                params = req.get("params", {})
+        idx = 0
+        while idx < len(probes):
+            probe = probes[idx]
+            group_id = probe.get("concurrent_group")
+            if group_id:
+                batch = []
+                while idx < len(probes) and probes[idx].get("concurrent_group") == group_id:
+                    batch.append(probes[idx])
+                    idx += 1
+                results.extend(await self._execute_concurrent_probe_batch(batch))
+                continue
 
-                if method == "tools/call":
-                    result = await self.call_tool(params.get("name", ""), params.get("arguments", {}))
-                else:
-                    result = await self._send_raw(req)
-            finally:
-                self._probe_context = None
-
+            result = await self._execute_probe(probe)
             results.append(
                 {
                     "probe_type": probe["probe_type"],
@@ -124,8 +156,41 @@ class StdioAgentDriver:
                     "result": result,
                 }
             )
+            idx += 1
 
         return results
+
+    async def _execute_concurrent_probe_batch(self, probes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        self._probe_context = probes[0]["probe_type"]
+        try:
+            results = await asyncio.gather(*(self._execute_probe_request(probe) for probe in probes))
+        finally:
+            self._probe_context = None
+
+        return [
+            {
+                "probe_type": probe["probe_type"],
+                "description": probe["description"],
+                "result": result,
+            }
+            for probe, result in zip(probes, results, strict=True)
+        ]
+
+    async def _execute_probe(self, probe: dict[str, Any]) -> dict[str, Any] | None:
+        self._probe_context = probe["probe_type"]
+        try:
+            return await self._execute_probe_request(probe)
+        finally:
+            self._probe_context = None
+
+    async def _execute_probe_request(self, probe: dict[str, Any]) -> dict[str, Any] | None:
+        req = probe["request"]
+        method = req.get("method")
+        params = req.get("params", {})
+
+        if method == "tools/call":
+            return await self.call_tool(params.get("name", ""), params.get("arguments", {}))
+        return await self._send_raw(req)
 
     async def _send_request(self, method: str, params: dict[str, Any]) -> dict[str, Any] | None:
         self._request_id += 1
@@ -133,13 +198,12 @@ class StdioAgentDriver:
         msg = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
 
         self._record(msg, Direction.CLIENT_TO_SERVER)
+        future: asyncio.Future = asyncio.get_event_loop().create_future()
+        self._pending[rid] = future
 
         if self._process and self._process.stdin:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
-
-        future: asyncio.Future = asyncio.get_event_loop().create_future()
-        self._pending[rid] = future
 
         try:
             result = await asyncio.wait_for(future, timeout=30.0)
@@ -166,14 +230,15 @@ class StdioAgentDriver:
 
         rid = msg.get("id")
         self._record(msg, Direction.CLIENT_TO_SERVER)
+        if rid is not None:
+            future: asyncio.Future = asyncio.get_event_loop().create_future()
+            self._pending[rid] = future
 
         if self._process and self._process.stdin:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
 
         if rid is not None:
-            future: asyncio.Future = asyncio.get_event_loop().create_future()
-            self._pending[rid] = future
             try:
                 return await asyncio.wait_for(future, timeout=10.0)
             except TimeoutError:
@@ -237,4 +302,5 @@ class StdioAgentDriver:
         event.redacted_fields = redacted_fields
         event.is_probe = is_probe
         event.probe_type = probe_type
+        event.is_stress = self._stress_context
         self._events.append(event)

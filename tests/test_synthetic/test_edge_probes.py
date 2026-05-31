@@ -4,10 +4,15 @@ from reviewmymcp.ingest.schema import ToolDefinition
 from reviewmymcp.synthetic.edge_probes import generate_edge_probes
 
 
-def _tool(name: str, required: list[str] | None = None, properties: dict | None = None) -> ToolDefinition:
+def _tool(
+    name: str,
+    required: list[str] | None = None,
+    properties: dict | None = None,
+    description: str | None = None,
+) -> ToolDefinition:
     return ToolDefinition(
         name=name,
-        description=f"Tool {name}",
+        description=description or f"Tool {name}",
         input_schema={
             "type": "object",
             "properties": properties or {},
@@ -67,3 +72,71 @@ def test_all_probes_have_request():
         assert "request" in probe
         assert "probe_type" in probe
         assert "description" in probe
+
+
+def test_concurrent_write_integrity_probes_for_mutator():
+    write_tool = _tool(
+        "create_entities",
+        required=["entities"],
+        properties={
+            "entities": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "entityType": {"type": "string"},
+                        "observations": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["name", "entityType", "observations"],
+                },
+            },
+        },
+    )
+    read_tool = _tool("read_graph")
+
+    probes = generate_edge_probes([write_tool, read_tool])
+    burst = [p for p in probes if p["probe_type"] == "concurrent_write_integrity"]
+    readback = [p for p in probes if p["probe_type"] == "concurrent_write_integrity_readback"]
+
+    assert len(burst) == 5
+    assert len({p["concurrent_group"] for p in burst}) == 1
+    assert len(readback) == 1
+    names = [
+        p["request"]["params"]["arguments"]["entities"][0]["name"]
+        for p in burst
+    ]
+    assert len(set(names)) == 5
+
+
+def test_ssrf_url_filtering_probes_for_url_fetch_tool():
+    tool = _tool(
+        "fetch_content",
+        required=["url"],
+        properties={"url": {"type": "string"}},
+        description="Fetch web page content from a URL",
+    )
+
+    probes = generate_edge_probes([tool])
+    ssrf = [p for p in probes if p["probe_type"] == "ssrf_url_filtering"]
+    targets = {p["request"]["params"]["arguments"]["url"] for p in ssrf}
+
+    assert len(ssrf) == 4
+    assert "http://127.0.0.1:1/" in targets
+    assert "http://169.254.169.254/latest/meta-data/" in targets
+    assert "file:///etc/hosts" in targets
+    assert "http://10.0.0.1/" in targets
+
+
+def test_ssrf_url_filtering_skips_region_url_selector():
+    tool = _tool(
+        "find_dsns",
+        required=["regionUrl"],
+        properties={"regionUrl": {"type": "string"}},
+        description="Find Sentry DSNs using a regionUrl datacenter selector",
+    )
+
+    probes = generate_edge_probes([tool])
+    ssrf = [p for p in probes if p["probe_type"] == "ssrf_url_filtering"]
+
+    assert ssrf == []
