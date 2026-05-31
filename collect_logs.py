@@ -126,6 +126,17 @@ async def run_handshake(driver: StdioAgentDriver) -> dict[str, Any] | None:
     return init_result
 
 
+def scenario_tool_gaps(scenarios: list[dict[str, Any]], tool_names: set[str]) -> list[dict[str, str]]:
+    gaps: list[dict[str, str]] = []
+    for scenario in scenarios:
+        scenario_name = scenario.get("name", "unnamed")
+        for step in scenario.get("steps", []):
+            tool = step.get("tool", "")
+            if tool and tool not in tool_names:
+                gaps.append({"scenario": scenario_name, "tool": tool})
+    return gaps
+
+
 async def run_server_session(config: ServerConfig, timeout: int) -> list[McpEvent]:
     print(f"\n{'='*60}")
     print(f"  Server: {config.name}")
@@ -147,6 +158,11 @@ async def run_server_session(config: ServerConfig, timeout: int) -> list[McpEven
 
         tool_count = len(driver.tools)
         print(f"  Handshake OK — {tool_count} tools discovered")
+        gaps = scenario_tool_gaps(config.scenarios, {tool.name for tool in driver.tools})
+        if gaps:
+            print(f"  [WARN] {len(gaps)} scenario step(s) reference missing tools:")
+            for gap in gaps[:10]:
+                print(f"    - {gap['scenario']}: {gap['tool']}")
 
         for scenario in config.scenarios:
             name = scenario.get("name", "unnamed")

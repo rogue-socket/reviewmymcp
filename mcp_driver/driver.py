@@ -143,15 +143,16 @@ class StdioAgentDriver:
 
         rid = msg.get("id")
         self._record(msg, CLIENT_TO_SERVER)
+        if rid is not None:
+            future: asyncio.Future = asyncio.get_event_loop().create_future()
+            self._pending[rid] = future
+            self._send_times[rid] = time.monotonic()
 
         if self._process and self._process.stdin:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
 
         if rid is not None:
-            future: asyncio.Future = asyncio.get_event_loop().create_future()
-            self._pending[rid] = future
-            self._send_times[rid] = time.monotonic()
             try:
                 return await asyncio.wait_for(future, timeout=10.0)
             except TimeoutError:
@@ -171,14 +172,13 @@ class StdioAgentDriver:
         msg = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
 
         self._record(msg, CLIENT_TO_SERVER)
+        future: asyncio.Future = asyncio.get_event_loop().create_future()
+        self._pending[rid] = future
         self._send_times[rid] = time.monotonic()
 
         if self._process and self._process.stdin:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
-
-        future: asyncio.Future = asyncio.get_event_loop().create_future()
-        self._pending[rid] = future
 
         try:
             result = await asyncio.wait_for(future, timeout=30.0)
