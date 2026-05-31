@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections import defaultdict
+from typing import Any
 
 from reviewmymcp.evaluators.base import (
     EvaluatorConfig,
@@ -14,6 +17,16 @@ from reviewmymcp.evaluators.base import (
 from reviewmymcp.ingest.schema import McpEvent, ServerMeta
 
 STANDARD_ERROR_CODES = {-32700, -32600, -32601, -32602, -32603, -32042}
+DESTRUCTIVE_TOOL_RE = re.compile(r"^(delete|remove|drop|clear|purge|truncate|reset)[_-]", re.IGNORECASE)
+DESTRUCTIVE_DESC_RE = re.compile(r"\b(delete|remove|drop|purge|clear|truncate|reset)\b", re.IGNORECASE)
+JSON_SCHEMA_TYPES = {"object", "array", "string", "number", "integer", "boolean", "null"}
+JSON_SCHEMA_TOP_LEVEL_KEYS = {"oneOf", "anyOf", "allOf", "enum", "$ref"}
+NON_JSON_SCHEMA_FINGERPRINTS = {"_def", "_zod", "_validators", "__fields__", "model_fields"}
+ERROR_CONTENT_RE = re.compile(
+    r"\b(api error|error:|exception|failed|forbidden|http\s+[45]\d\d|invalid|not found|rate limit|traceback|unauthorized)\b",
+    re.IGNORECASE,
+)
+ERROR_FALSE_POSITIVE_RE = re.compile(r"\b(?:no|zero|without)\s+errors?\b|\berrors?\s+found:\s*0\b", re.IGNORECASE)
 
 
 class ConformanceEvaluator:
@@ -33,6 +46,9 @@ class ConformanceEvaluator:
         findings.extend(self._check_session_management(events))
         findings.extend(self._check_error_codes(events))
         findings.extend(self._check_notification_correctness(events))
+        findings.extend(self._check_is_error_flag_set(events))
+        findings.extend(self._check_destructive_hint_missing(server_meta))
+        findings.extend(self._check_output_schema_wire_format(server_meta))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -43,6 +59,9 @@ class ConformanceEvaluator:
                 "conformance.session-management",
                 "conformance.error-code-correctness",
                 "conformance.notification-correctness",
+                "conformance.is-error-flag-set",
+                "conformance.destructive-hint-missing",
+                "conformance.output-schema-wire-format",
             ],
             findings=findings,
             checks_skipped=skipped,
@@ -214,6 +233,50 @@ class ConformanceEvaluator:
             )
         return findings
 
+    def _check_output_schema_wire_format(self, server_meta: ServerMeta) -> list[Finding]:
+        findings: list[Finding] = []
+        for tool in server_meta.tools:
+            schema = tool.output_schema
+            if not schema:
+                continue
+
+            issue = self._output_schema_issue(schema)
+            if issue is None:
+                continue
+
+            findings.append(
+                Finding(
+                    check_id="conformance.output-schema-wire-format",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool.name}` outputSchema is not plain JSON Schema",
+                    description=f"tools/list outputSchema for `{tool.name}` appears to use {issue}.",
+                    evidence={
+                        "tool": tool.name,
+                        "issue": issue,
+                        "schema_snippet": json.dumps(schema, default=str)[:200],
+                    },
+                    remediation="Emit plain JSON Schema in tools/list outputSchema, not SDK-native schema objects.",
+                    affected_entity=tool.name,
+                )
+            )
+        return findings
+
+    def _output_schema_issue(self, schema: Any) -> str | None:
+        if not isinstance(schema, dict):
+            return "a non-object schema"
+
+        fingerprint = _find_non_json_schema_fingerprint(schema)
+        if fingerprint:
+            return f"a non-JSON-Schema field `{fingerprint}`"
+
+        schema_type = schema.get("type")
+        if _is_valid_json_schema_type(schema_type):
+            return None
+        if any(key in schema for key in JSON_SCHEMA_TOP_LEVEL_KEYS):
+            return None
+
+        return "an unrecognized top-level schema shape"
+
     def _check_session_management(self, events: list[McpEvent]) -> list[Finding]:
         findings: list[Finding] = []
         session_id_assigned: str | None = None
@@ -278,10 +341,7 @@ class ConformanceEvaluator:
             if not event.raw_message:
                 continue
             raw = event.raw_message
-            has_method = "method" in raw
             has_id = "id" in raw
-            has_result = "result" in raw
-            has_error = "error" in raw
 
             if event.is_notification and has_id:
                 bad_notifications += 1
@@ -298,3 +358,116 @@ class ConformanceEvaluator:
                 )
             )
         return findings
+
+    def _check_is_error_flag_set(self, events: list[McpEvent]) -> list[Finding]:
+        requests = {
+            event.event_id: event
+            for event in events
+            if event.is_request and event.method == "tools/call" and not event.is_probe
+        }
+        samples_by_tool: dict[str, list[str]] = defaultdict(list)
+
+        for response in events:
+            if not (
+                response.is_response
+                and response.request_event_id in requests
+                and response.result
+                and not response.is_error
+                and not response.is_probe
+            ):
+                continue
+            if response.result.get("isError") is True:
+                continue
+
+            text = _tool_response_text(response.result)
+            if not _looks_like_error_content(text):
+                continue
+
+            request = requests[response.request_event_id]
+            tool_name = request.params.get("name", "unknown") if request.params else "unknown"
+            samples_by_tool[tool_name].append(text[:300])
+
+        findings = []
+        for tool_name, samples in samples_by_tool.items():
+            findings.append(
+                Finding(
+                    check_id="conformance.is-error-flag-set",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool_name}` returned error content without `isError: true`",
+                    description="Tool responses that contain errors should set `isError: true` so agents can distinguish failures from successful content.",
+                    evidence={"tool": tool_name, "samples": samples[:3]},
+                    remediation="Return `isError: true` for tool-level failures, or use a JSON-RPC error for protocol-level failures.",
+                    affected_entity=tool_name,
+                )
+            )
+        return findings
+
+    def _check_destructive_hint_missing(self, server_meta: ServerMeta) -> list[Finding]:
+        findings: list[Finding] = []
+        for tool in server_meta.tools:
+            text = f"{tool.name} {tool.description}"
+            if not (DESTRUCTIVE_TOOL_RE.search(tool.name) or DESTRUCTIVE_DESC_RE.search(text)):
+                continue
+            if tool.annotations.get("destructiveHint") is True:
+                continue
+            findings.append(
+                Finding(
+                    check_id="conformance.destructive-hint-missing",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool.name}` appears destructive but lacks destructiveHint",
+                    description=(
+                        "Tool name or description suggests permanent destructive behavior, "
+                        "but tools/list did not advertise annotations.destructiveHint: true."
+                    ),
+                    evidence={
+                        "tool": tool.name,
+                        "annotations": tool.annotations,
+                    },
+                    remediation="Set `annotations.destructiveHint: true` for destructive tools so clients can apply safeguards.",
+                    affected_entity=tool.name,
+                )
+            )
+        return findings
+
+
+def _is_valid_json_schema_type(value: Any) -> bool:
+    if isinstance(value, str):
+        return value in JSON_SCHEMA_TYPES
+    if isinstance(value, list):
+        return bool(value) and all(isinstance(item, str) and item in JSON_SCHEMA_TYPES for item in value)
+    return False
+
+
+def _tool_response_text(result: dict[str, Any]) -> str:
+    content = result.get("content", [])
+    if not isinstance(content, list):
+        return ""
+    return "\n".join(
+        item["text"]
+        for item in content
+        if isinstance(item, dict) and isinstance(item.get("text"), str)
+    )
+
+
+def _looks_like_error_content(text: str) -> bool:
+    if not text:
+        return False
+    if ERROR_FALSE_POSITIVE_RE.search(text):
+        return False
+    return bool(ERROR_CONTENT_RE.search(text))
+
+
+def _find_non_json_schema_fingerprint(value: Any) -> str | None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key in NON_JSON_SCHEMA_FINGERPRINTS:
+                return key
+            found = _find_non_json_schema_fingerprint(nested)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _find_non_json_schema_fingerprint(item)
+            if found:
+                return found
+    return None

@@ -5,8 +5,7 @@ from datetime import UTC, datetime, timedelta
 from reviewmymcp.evaluators.base import EvaluatorConfig
 from reviewmymcp.evaluators.conformance.checks import ConformanceEvaluator
 from reviewmymcp.ingest.schema import ServerCapabilities
-
-from tests.conftest import make_event, make_init_pair, make_server_meta
+from tests.conftest import make_event, make_init_pair, make_server_meta, make_tool_call_pair, make_tool_def
 
 
 def test_missing_initialize():
@@ -95,3 +94,82 @@ def test_notification_with_id():
     result = evaluator.evaluate([event], make_server_meta(), EvaluatorConfig())
     notif = [f for f in result.findings if f.check_id == "conformance.notification-correctness"]
     assert len(notif) == 1
+
+
+def test_is_error_flag_set_detects_error_as_content():
+    req, resp = make_tool_call_pair(
+        "fetch_content",
+        {"url": "http://example.invalid"},
+        result_content=[{"type": "text", "text": "Error: failed to fetch URL with HTTP 500"}],
+    )
+    resp.result["isError"] = False
+
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([req, resp], make_server_meta(), EvaluatorConfig())
+    flag_findings = [f for f in result.findings if f.check_id == "conformance.is-error-flag-set"]
+
+    assert len(flag_findings) == 1
+    assert flag_findings[0].affected_entity == "fetch_content"
+
+
+def test_is_error_flag_set_ignores_non_error_content():
+    req, resp = make_tool_call_pair(
+        "scan_results",
+        {},
+        result_content=[{"type": "text", "text": "No errors found in the latest scan."}],
+    )
+
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([req, resp], make_server_meta(), EvaluatorConfig())
+    flag_findings = [f for f in result.findings if f.check_id == "conformance.is-error-flag-set"]
+
+    assert flag_findings == []
+
+
+def test_destructive_tool_missing_destructive_hint():
+    tool = make_tool_def("delete_entities", description="Delete entities permanently")
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    missing_hint = [f for f in result.findings if f.check_id == "conformance.destructive-hint-missing"]
+
+    assert len(missing_hint) == 1
+    assert missing_hint[0].severity.value == "medium"
+
+
+def test_destructive_tool_with_destructive_hint_ok():
+    tool = make_tool_def(
+        "delete_entities",
+        description="Delete entities permanently",
+        annotations={"destructiveHint": True},
+    )
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    missing_hint = [f for f in result.findings if f.check_id == "conformance.destructive-hint-missing"]
+
+    assert missing_hint == []
+
+
+def test_output_schema_wire_format_flags_zod_fingerprint():
+    tool = make_tool_def(
+        "get_memory",
+        output_schema={"_def": {"typeName": "ZodObject"}, "shape": {}},
+    )
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    schema_findings = [f for f in result.findings if f.check_id == "conformance.output-schema-wire-format"]
+
+    assert len(schema_findings) == 1
+    assert schema_findings[0].severity.value == "medium"
+    assert schema_findings[0].evidence["tool"] == "get_memory"
+
+
+def test_output_schema_wire_format_accepts_json_schema():
+    tool = make_tool_def(
+        "get_memory",
+        output_schema={"type": "object", "properties": {"content": {"type": "string"}}},
+    )
+    evaluator = ConformanceEvaluator()
+    result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
+    schema_findings = [f for f in result.findings if f.check_id == "conformance.output-schema-wire-format"]
+
+    assert schema_findings == []
