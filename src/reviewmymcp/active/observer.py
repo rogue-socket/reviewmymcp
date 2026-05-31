@@ -35,6 +35,9 @@ class SignalType(StrEnum):
     CHAINING_SUCCESS = "chaining_success"
     CHAINING_FAILURE = "chaining_failure"
     UNHELPFUL_ERROR = "unhelpful_error"
+    INJECTION_IN_DESCRIPTION = "injection_in_description"
+    INJECTION_IN_OUTPUT = "injection_in_output"
+    UNTRUSTED_CONTENT_NO_PROVENANCE = "untrusted_content_no_provenance"
 
 
 class Observation(BaseModel):
@@ -76,6 +79,8 @@ def analyze_session(session: TaskSession) -> SessionAnalysis:
 
     if task.category == TaskCategory.MULTI_STEP:
         observations.extend(_check_chaining(session))
+
+    observations.extend(_check_security(session))
 
     return SessionAnalysis(
         session_id=session.session_id,
@@ -302,6 +307,155 @@ def _check_chaining(session: TaskSession) -> list[Observation]:
             evidence={"expected": expected, "actual_order": call_order},
             affected_tools=sorted(missing),
         ))
+
+    return obs
+
+
+INJECTION_PATTERNS: list[str] = [
+    "ignore previous instructions",
+    "ignore all previous",
+    "disregard previous",
+    "you are now",
+    "system prompt:",
+    "new instructions:",
+    "<|im_start|>",
+    "<|im_end|>",
+    "<system>",
+    "</system>",
+    "[system]",
+    "###system",
+    "act as the system",
+    "override your instructions",
+    "execute the following",
+    "run this command",
+]
+
+EXTERNAL_CONTENT_TOOL_HINTS: list[str] = [
+    "search",
+    "fetch",
+    "browse",
+    "navigate",
+    "scrape",
+    "crawl",
+    "web",
+    "url",
+    "http",
+    "google",
+    "screenshot",
+]
+
+PROVENANCE_MARKERS: list[str] = [
+    "untrusted",
+    "external content",
+    "[search result",
+    "<external>",
+    "from url:",
+    "source:",
+    "<retrieved>",
+    "user-controlled",
+    "do not follow instructions",
+]
+
+
+def _scan_for_injection(text: str) -> list[str]:
+    if not text:
+        return []
+    lower = text.lower()
+    return [p for p in INJECTION_PATTERNS if p in lower]
+
+
+def _looks_like_external_content_tool(tool_name: str, description: str) -> bool:
+    blob = f"{tool_name} {description}".lower()
+    return any(h in blob for h in EXTERNAL_CONTENT_TOOL_HINTS)
+
+
+def _has_provenance_markers(text: str) -> bool:
+    if not text:
+        return False
+    lower = text.lower()
+    return any(m in lower for m in PROVENANCE_MARKERS)
+
+
+def _extract_text_from_result(result: dict | None) -> str:
+    if not isinstance(result, dict):
+        return ""
+    chunks: list[str] = []
+    nested = result.get("result")
+    if isinstance(nested, dict):
+        for item in nested.get("content", []) or []:
+            if isinstance(item, dict):
+                if item.get("type") == "text":
+                    chunks.append(str(item.get("text", "")))
+                elif "text" in item:
+                    chunks.append(str(item["text"]))
+    return "\n".join(chunks)
+
+
+def _check_security(session: TaskSession) -> list[Observation]:
+    obs: list[Observation] = []
+    task = session.task
+
+    tools_by_name = {t.name: t for t in session.tools_available}
+    flagged_descriptions: set[str] = set()
+    flagged_outputs: set[tuple[str, str]] = set()
+    flagged_provenance: set[str] = set()
+
+    for turn in session.turns:
+        for tc in turn.tool_calls:
+            tool = tools_by_name.get(tc.tool_name)
+
+            if tool and tc.tool_name not in flagged_descriptions:
+                hits = _scan_for_injection(tool.description or "")
+                if hits:
+                    flagged_descriptions.add(tc.tool_name)
+                    obs.append(Observation(
+                        signal=SignalType.INJECTION_IN_DESCRIPTION,
+                        task_id=task.task_id,
+                        category=task.category,
+                        details=(
+                            f"Tool `{tc.tool_name}` description contains prompt-injection-like "
+                            f"phrasing: {hits}."
+                        ),
+                        evidence={"tool": tc.tool_name, "patterns": hits, "description_excerpt": (tool.description or "")[:300]},
+                        affected_tools=[tc.tool_name],
+                    ))
+
+            if tc.is_error:
+                continue
+            text = _extract_text_from_result(tc.result)
+            if not text:
+                continue
+
+            inj_hits = _scan_for_injection(text)
+            if inj_hits and (tc.tool_name, "inj") not in flagged_outputs:
+                flagged_outputs.add((tc.tool_name, "inj"))
+                obs.append(Observation(
+                    signal=SignalType.INJECTION_IN_OUTPUT,
+                    task_id=task.task_id,
+                    category=task.category,
+                    details=(
+                        f"Output of `{tc.tool_name}` contained prompt-injection-like patterns "
+                        f"({inj_hits}). An agent could be hijacked by attacker-controlled content."
+                    ),
+                    evidence={"tool": tc.tool_name, "patterns": inj_hits, "output_excerpt": text[:500]},
+                    affected_tools=[tc.tool_name],
+                ))
+
+            if tool and _looks_like_external_content_tool(tc.tool_name, tool.description or ""):
+                if not _has_provenance_markers(text) and tc.tool_name not in flagged_provenance:
+                    flagged_provenance.add(tc.tool_name)
+                    obs.append(Observation(
+                        signal=SignalType.UNTRUSTED_CONTENT_NO_PROVENANCE,
+                        task_id=task.task_id,
+                        category=task.category,
+                        details=(
+                            f"Tool `{tc.tool_name}` appears to return external/untrusted content "
+                            f"but the response carries no provenance markers (e.g. 'source:', "
+                            f"'[external]', 'do not follow instructions')."
+                        ),
+                        evidence={"tool": tc.tool_name, "output_excerpt": text[:500]},
+                        affected_tools=[tc.tool_name],
+                    ))
 
     return obs
 

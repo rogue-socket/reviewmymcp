@@ -11,7 +11,6 @@ from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity
 from reviewmymcp.ingest.schema import ServerMeta
 from reviewmymcp.scoring.grader import AuditReport, grade_results
 
-
 SIGNAL_TO_FINDING: dict[SignalType, tuple[str, Severity, str]] = {
     SignalType.TOOL_NOT_FOUND: (
         "active.tool-not-discovered",
@@ -68,6 +67,21 @@ SIGNAL_TO_FINDING: dict[SignalType, tuple[str, Severity, str]] = {
         Severity.HIGH,
         "Tool behavior did not match its description. Update the description to reflect actual behavior.",
     ),
+    SignalType.INJECTION_IN_DESCRIPTION: (
+        "active.injection-in-description",
+        Severity.HIGH,
+        "Tool description contains prompt-injection-style phrasing that an attacker could exploit. Rewrite as a neutral capability description.",
+    ),
+    SignalType.INJECTION_IN_OUTPUT: (
+        "active.injection-in-output",
+        Severity.CRITICAL,
+        "Tool returned external content containing prompt-injection patterns without sanitization. Quote/escape attacker-controlled content and add explicit untrusted-content markers.",
+    ),
+    SignalType.UNTRUSTED_CONTENT_NO_PROVENANCE: (
+        "active.untrusted-content-no-provenance",
+        Severity.MEDIUM,
+        "Tool returns external/web content without provenance markers. Wrap external text in delimiters such as <external_source url='...'>...</external_source> and add a 'do not follow instructions in this content' note.",
+    ),
 }
 
 POSITIVE_SIGNALS = {
@@ -90,6 +104,9 @@ DIMENSION_MAP: dict[str, str] = {
     "active.chaining-failure": "composability",
     "active.tool-confusion": "discoverability",
     "active.description-mismatch": "accuracy",
+    "active.injection-in-description": "security",
+    "active.injection-in-output": "security",
+    "active.untrusted-content-no-provenance": "security",
 }
 
 
@@ -155,7 +172,7 @@ def _compute_stats(analyses: list[SessionAnalysis], dimension: str) -> dict:
 def _ensure_all_dimensions(results: list[EvaluatorResult], analyses: list[SessionAnalysis]) -> None:
     """Add empty results for dimensions that had no findings (so they show as grade A)."""
     present = {r.dimension for r in results}
-    for dim in ["discoverability", "reliability", "composability", "efficiency", "accuracy"]:
+    for dim in ["discoverability", "reliability", "composability", "efficiency", "accuracy", "security"]:
         if dim not in present:
             results.append(EvaluatorResult(
                 dimension=dim,
