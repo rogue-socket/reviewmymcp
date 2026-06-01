@@ -1,5 +1,8 @@
 from datetime import UTC, datetime
 
+import pytest
+
+from collect_logs import build_server_configs, main
 from collect_logs import scenario_coverage_summary, scenario_tool_gaps
 from mcp_driver.schema import McpEvent
 
@@ -50,3 +53,23 @@ def test_scenario_tool_gaps_flags_stale_scenario_tools():
     scenarios = [{"name": "lookup", "steps": [{"tool": "old-search"}, {"tool": "fetch"}]}]
 
     assert scenario_tool_gaps(scenarios, {"fetch"}) == [{"scenario": "lookup", "tool": "old-search"}]
+
+
+def test_build_server_configs_honors_all_skips(tmp_path):
+    configs = build_server_configs(
+        tmp_path,
+        {"everything", "filesystem", "github", "playwright", "web_search"},
+    )
+
+    assert configs == []
+
+
+@pytest.mark.asyncio
+async def test_main_accepts_repeated_skip_groups(tmp_path, capsys):
+    await main(
+        str(tmp_path),
+        [["everything"], ["filesystem"], ["github"], ["playwright"], ["web_search"]],
+        timeout=1,
+    )
+
+    assert "No servers to run (all skipped)." in capsys.readouterr().out

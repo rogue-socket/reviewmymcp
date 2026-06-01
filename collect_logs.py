@@ -325,10 +325,11 @@ def ensure_playwright_browsers() -> None:
         print(f"  [WARN] Could not install Playwright browsers: {e}")
 
 
-async def main(output_dir: str, skip: list[str], timeout: int) -> None:
+async def main(output_dir: str, skip: list[str] | list[list[str]], timeout: int) -> None:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    skip_set = {s.lower().strip() for s in skip}
+    skip_values = [item for group in skip for item in (group if isinstance(group, list) else [group])]
+    skip_set = {s.lower().strip() for s in skip_values}
 
     print("MCP Log Collector")
     print(f"Output: {out.resolve()}")
@@ -389,6 +390,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--skip",
         nargs="*",
+        action="append",
         default=[],
         help="Server names to skip (everything, filesystem, github, playwright, web_search)",
     )
