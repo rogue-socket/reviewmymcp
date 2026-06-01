@@ -33,7 +33,7 @@ npx --version
 
 ## Part 1: Log-Based Audit (`replay` and `audit --log-file`)
 
-These commands take a captured NDJSON log file, run the 42 evaluator checks, and produce a scored report. No API keys needed (unless using `--llm-judges`).
+These commands take a captured NDJSON log file, run the 42 evaluator checks, and produce a scored report. Use `--no-llm-judges` for deterministic-only runs that do not call a judge provider.
 
 ### 1.1 Basic replay against the sample fixture
 

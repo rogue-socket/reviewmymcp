@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 import reviewmymcp.cli as cli_module
 from reviewmymcp.cli import cli
+from reviewmymcp.judge.base import JudgeResponse
 
 
 def test_version():
@@ -32,6 +33,27 @@ def test_replay_terminal(sample_stdio_log):
     result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--no-llm-judges"])
     assert result.exit_code in (0, 1)  # 1 if findings, 0 if none
     assert "Dimension Scores" in result.output
+
+
+def test_replay_warns_when_llm_judges_enabled(sample_stdio_log, monkeypatch):
+    class FastJudge:
+        provider_name = "test"
+
+        async def complete(self, request):
+            return JudgeResponse(
+                raw_text='{"score": 5, "rationale": "ok", "discrepancies": []}',
+                parsed={"score": 5, "rationale": "ok", "discrepancies": []},
+                provider="test",
+                model="test",
+            )
+
+    monkeypatch.setattr(cli_module, "_build_judge", lambda provider, model: FastJudge())
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--dimensions", "accuracy"])
+
+    assert result.exit_code in (0, 1)
+    assert "LLM judge checks enabled via anthropic" in result.stderr
 
 
 def test_replay_terminal_output_contract(sample_stdio_log):

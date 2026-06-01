@@ -72,6 +72,13 @@ def _build_judge(provider_name: str, model: str):
     return None
 
 
+def _warn_llm_judges_enabled(provider_name: str) -> None:
+    click.echo(
+        f"LLM judge checks enabled via {provider_name}; use --no-llm-judges for deterministic-only runs.",
+        err=True,
+    )
+
+
 def _merge_auth_scopes(discovered: list[str], configured: list[str] | tuple[str, ...]) -> list[str]:
     return sorted({scope for scope in [*discovered, *configured] if scope})
 
@@ -385,6 +392,7 @@ def audit(
         from reviewmymcp.judge.base import SyncJudgeAdapter
         judge_instance = _build_judge(audit_config.judge.provider, audit_config.judge.model)
         if judge_instance:
+            _warn_llm_judges_enabled(audit_config.judge.provider)
             judge_adapter = SyncJudgeAdapter(judge_instance)
 
     eval_config = EvaluatorConfig(
@@ -469,6 +477,7 @@ def replay(
         from reviewmymcp.judge.base import SyncJudgeAdapter
         judge_instance = _build_judge(judge_provider, judge_model)
         if judge_instance:
+            _warn_llm_judges_enabled(judge_provider)
             judge_adapter = SyncJudgeAdapter(judge_instance)
 
     dim_list = [d.strip() for d in dimensions.split(",")] if dimensions else None
