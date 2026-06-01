@@ -133,15 +133,6 @@ async def main():
 asyncio.run(main())
 ```
 
-### Integration with the CLI
-
-To register the `active-audit` command alongside the existing CLI, add this to `cli.py`:
-
-```python
-from reviewmymcp.active.cli import active_audit
-cli.add_command(active_audit)
-```
-
 ## Task Categories
 
 The active checker generates tasks across 6 categories to probe different aspects of MCP quality:
