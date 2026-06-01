@@ -32,7 +32,7 @@
 <table>
   <thead><tr><th>Dimension</th><th>Score</th><th>Grade</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Skipped</th></tr></thead>
   <tbody>
-  
+
   <tr>
     <td>accuracy</td>
     <td>56</td>
@@ -43,7 +43,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>compliance</td>
     <td>100</td>
@@ -54,7 +54,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>composability</td>
     <td>84</td>
@@ -65,7 +65,7 @@
     <td>-</td>
     <td>2</td>
   </tr>
-  
+
   <tr>
     <td>conformance</td>
     <td>100</td>
@@ -76,7 +76,7 @@
     <td>-</td>
     <td>-</td>
   </tr>
-  
+
   <tr>
     <td>discoverability</td>
     <td>88</td>
@@ -87,7 +87,7 @@
     <td>2</td>
     <td>-</td>
   </tr>
-  
+
   <tr>
     <td>efficiency</td>
     <td>100</td>
@@ -98,7 +98,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>performance</td>
     <td>100</td>
@@ -109,7 +109,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>reliability</td>
     <td>73</td>
@@ -120,7 +120,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>security</td>
     <td>58</td>
@@ -131,7 +131,7 @@
     <td>-</td>
     <td>-</td>
   </tr>
-  
+
   </tbody>
 </table>
 
@@ -142,21 +142,21 @@
 <table>
   <thead><tr><th>Check</th><th>Reason</th></tr></thead>
   <tbody>
-  
+
   <tr><td>efficiency.latency-cliff</td><td>fewer than 3 latency observations for 18 tool(s)</td></tr>
-  
+
   <tr><td>accuracy.output-schema-drift</td><td>fewer than 3 responses for 4 tool(s)</td></tr>
-  
+
   <tr><td>composability.idempotency-violation</td><td>fewer than 2 repeated call groups with 2+ successes (33 group(s) skipped)</td></tr>
-  
+
   <tr><td>composability.concurrency-safety</td><td>skipped 21 tool(s): need &gt;= 5 pairs and &gt;= 3 concurrent+sequential samples each</td></tr>
-  
+
   <tr><td>reliability.error-rate</td><td>fewer than 3 calls for 18 tool(s)</td></tr>
-  
+
   <tr><td>compliance.data-residency-signals</td><td>no expected_regions configured</td></tr>
-  
+
   <tr><td>performance.concurrent-session-scaling</td><td>need &gt;= 3 sessions, only 1 found</td></tr>
-  
+
   </tbody>
 </table>
 
@@ -248,133 +248,133 @@
 
 <details>
   <summary>accuracy — 18 findings</summary>
-  
+
   <div class="finding finding-high">
     <span class="severity-high">[HIGH]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `find_organizations`: 1 schema-invalid calls accepted</p>
     <p class="remediation">Fix: Either enforce schema validation or update the schema to match actual acceptance.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `find_projects`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `find_teams`: 1 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `list_issues`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `get_sentry_resource`: 6 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `update_issue`: 4 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `analyze_issue_with_seer`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `create_team`: 1 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `create_project`: 1 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `get_issue_tag_values`: 3 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `get_replay_details`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `list_events`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `get_profile_details`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `find_releases`: 1 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `list_issue_events`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `get_event_attachment`: 2 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `find_dsns`: 1 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>accuracy.schema-misuse</strong>
     <p>Tool `create_dsn`: 1 schema-valid calls rejected</p>
     <p class="remediation">Fix: Schema may be overly permissive — add constraints that reflect actual validation.</p>
   </div>
-  
+
 </details>
 
 
@@ -383,14 +383,14 @@
 
 <details>
   <summary>composability — 1 findings</summary>
-  
+
   <div class="finding finding-high">
     <span class="severity-high">[HIGH]</span>
     <strong>composability.error-recovery-surface</strong>
     <p>17/29 error responses (58%) are ambiguous</p>
     <p class="remediation">Fix: Include retryability hints and specific failure reasons in error responses.</p>
   </div>
-  
+
 </details>
 
 
@@ -399,28 +399,28 @@
 
 <details>
   <summary>discoverability — 3 findings</summary>
-  
+
   <div class="finding finding-low">
     <span class="severity-low">[LOW]</span>
     <strong>discoverability.name-quality</strong>
     <p>Tool `whoami` has naming issues: name contains no recognizable verb</p>
     <p class="remediation">Fix: Use descriptive verb_noun format (e.g., get_document, search_users).</p>
   </div>
-  
+
   <div class="finding finding-low">
     <span class="severity-low">[LOW]</span>
     <strong>discoverability.name-quality</strong>
     <p>Tool `analyze_issue_with_seer` has naming issues: name contains no recognizable verb</p>
     <p class="remediation">Fix: Use descriptive verb_noun format (e.g., get_document, search_users).</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>discoverability.rest-wrapper-smell</strong>
     <p>Tool `list_events` description references HTTP methods or endpoints</p>
     <p class="remediation">Fix: Rewrite description to focus on what the tool does for the agent, not the HTTP details.</p>
   </div>
-  
+
 </details>
 
 
@@ -431,161 +431,161 @@
 
 <details>
   <summary>reliability — 3 findings</summary>
-  
+
   <div class="finding finding-high">
     <span class="severity-high">[HIGH]</span>
     <strong>reliability.error-rate</strong>
     <p>Tool `get_sentry_resource` has 100% error rate</p>
     <p class="remediation">Fix: Investigate root cause of failures. Consider adding retry logic or circuit breakers.</p>
   </div>
-  
+
   <div class="finding finding-high">
     <span class="severity-high">[HIGH]</span>
     <strong>reliability.error-rate</strong>
     <p>Tool `update_issue` has 100% error rate</p>
     <p class="remediation">Fix: Investigate root cause of failures. Consider adding retry logic or circuit breakers.</p>
   </div>
-  
+
   <div class="finding finding-high">
     <span class="severity-high">[HIGH]</span>
     <strong>reliability.error-rate</strong>
     <p>Tool `get_issue_tag_values` has 100% error rate</p>
     <p class="remediation">Fix: Investigate root cause of failures. Consider adding retry logic or circuit breakers.</p>
   </div>
-  
+
 </details>
 
 
 
 <details>
   <summary>security — 18 findings</summary>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `find_organizations` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `find_teams` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `find_projects` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `find_releases` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `get_issue_tag_values` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `get_replay_details` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `create_project` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `update_project` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `create_dsn` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `find_dsns` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `analyze_issue_with_seer` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `search_docs` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `get_doc` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `list_issues` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `list_events` indicates file system access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `list_issue_events` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `get_profile_details` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>security.excessive-permissions</strong>
     <p>Tool `get_sentry_resource` indicates arbitrary network access without safeguards</p>
     <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
   </div>
-  
+
 </details>
 
 

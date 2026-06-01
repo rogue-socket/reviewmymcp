@@ -2,7 +2,6 @@
 
 from reviewmymcp.evaluators.base import EvaluatorConfig
 from reviewmymcp.evaluators.compliance.checks import ComplianceEvaluator
-
 from tests.conftest import make_event, make_init_pair, make_server_meta, make_tool_call_pair
 
 

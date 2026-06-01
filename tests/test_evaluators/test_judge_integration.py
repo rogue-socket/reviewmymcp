@@ -4,10 +4,8 @@ from reviewmymcp.evaluators.accuracy.checks import AccuracyEvaluator
 from reviewmymcp.evaluators.discoverability.checks import DiscoverabilityEvaluator
 from reviewmymcp.evaluators.security.checks import SecurityEvaluator
 from reviewmymcp.judge.base import JudgeResponse
-
 from tests.conftest import (
     EvaluatorConfig,
-    make_event,
     make_server_meta,
     make_tool_call_pair,
     make_tool_def,

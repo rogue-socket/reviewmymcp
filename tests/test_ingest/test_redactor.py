@@ -1,6 +1,6 @@
 """Tests for PII/secret redaction."""
 
-from reviewmymcp.ingest.redactor import redact_dict, redact_string, BUILTIN_PATTERNS
+from reviewmymcp.ingest.redactor import BUILTIN_PATTERNS, redact_dict, redact_string
 
 
 def test_redact_jwt():

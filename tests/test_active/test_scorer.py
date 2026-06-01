@@ -11,7 +11,6 @@ from reviewmymcp.active.models import (
     ToolCallAttempt,
 )
 from reviewmymcp.active.scorer import score_executions
-
 from tests.conftest import make_server_meta
 
 

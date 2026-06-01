@@ -2,8 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
-from reviewmymcp.ingest.correlator import correlate, get_sessions
+import pytest
 
+from reviewmymcp.ingest.correlator import correlate, get_sessions
 from tests.conftest import make_event
 
 
@@ -85,6 +86,3 @@ def test_get_sessions():
     assert len(sessions["a"]) == 2
     assert len(sessions["b"]) == 1
     assert len(sessions[None]) == 1
-
-
-import pytest

@@ -1,7 +1,7 @@
 """Tests for evaluator registry."""
 
 from reviewmymcp.evaluators.base import EvaluatorConfig, EvaluatorResult
-from reviewmymcp.ingest.schema import McpEvent, ServerMeta
+from reviewmymcp.ingest.schema import ServerMeta
 
 
 class FakeEvaluator:
@@ -15,7 +15,6 @@ def test_register_and_get(monkeypatch):
     from reviewmymcp.evaluators import registry
 
     # Clear registry for isolation
-    original = registry._REGISTRY.copy()
     monkeypatch.setattr(registry, "_REGISTRY", {})
 
     evaluator = FakeEvaluator()
@@ -26,8 +25,9 @@ def test_register_and_get(monkeypatch):
 
 
 def test_register_duplicate_raises(monkeypatch):
-    from reviewmymcp.evaluators import registry
     import pytest
+
+    from reviewmymcp.evaluators import registry
 
     monkeypatch.setattr(registry, "_REGISTRY", {})
     registry.register(FakeEvaluator())

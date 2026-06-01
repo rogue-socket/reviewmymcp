@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from reviewmymcp.active.models import ActiveTask, AgentTurn, BehavioralSignal, ToolCallAttempt
+from reviewmymcp.active.models import ActiveTask, AgentTurn, BehavioralSignal
 
 
 def extract_turn_signals(

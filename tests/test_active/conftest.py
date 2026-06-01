@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from reviewmymcp.judge.base import AgentToolCall, AgentTurnResponse
+from reviewmymcp.judge.base import AgentTurnResponse
 
 
 class MockAgentProvider:

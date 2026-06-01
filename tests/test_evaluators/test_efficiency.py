@@ -1,8 +1,7 @@
 """Tests for efficiency evaluators."""
 
 from reviewmymcp.evaluators.efficiency.checks import EfficiencyEvaluator
-
-from tests.conftest import make_event, make_server_meta, make_tool_call_pair, make_tool_def, EvaluatorConfig
+from tests.conftest import EvaluatorConfig, make_server_meta, make_tool_call_pair, make_tool_def
 
 
 def test_description_bloat_single_tool():

@@ -4,13 +4,12 @@ import math
 
 from reviewmymcp.evaluators.base import EvaluatorResult, Finding, Severity, SkippedCheck
 from reviewmymcp.scoring.grader import (
-    Grade,
     SCORE_CURVE_FACTOR,
+    Grade,
     _grade_from_score,
     _score_dimension,
     grade_results,
 )
-
 from tests.conftest import make_server_meta
 
 
@@ -98,11 +97,11 @@ class TestGradeFromScore:
         assert _grade_from_score(40.0, []) == Grade.D
         assert _grade_from_score(39.0, []) == Grade.F
 
-    def test_one_critical_caps_at_D(self):
+    def test_one_critical_caps_at_d(self):
         findings = [_finding("s.x", Severity.CRITICAL)]
         assert _grade_from_score(95.0, findings) == Grade.D
 
-    def test_two_criticals_forces_F(self):
+    def test_two_criticals_forces_f(self):
         findings = [_finding("s.x", Severity.CRITICAL), _finding("s.y", Severity.CRITICAL)]
         assert _grade_from_score(95.0, findings) == Grade.F
 
@@ -111,12 +110,12 @@ class TestGradeFromScore:
         findings = [_finding("s.x", Severity.CRITICAL)]
         assert _grade_from_score(30.0, findings) == Grade.F
 
-    def test_three_highs_caps_at_C(self):
+    def test_three_highs_caps_at_c(self):
         findings = [_finding(f"r.{i}", Severity.HIGH) for i in range(3)]
         # Even with an A-range score, 3 HIGHs cap at C
         assert _grade_from_score(95.0, findings) == Grade.C
 
-    def test_five_highs_caps_at_D(self):
+    def test_five_highs_caps_at_d(self):
         findings = [_finding(f"r.{i}", Severity.HIGH) for i in range(5)]
         assert _grade_from_score(95.0, findings) == Grade.D
 
@@ -130,23 +129,23 @@ class TestGradeFromScore:
 
 
 class TestGradeResults:
-    def test_no_findings_grade_A(self):
+    def test_no_findings_grade_a(self):
         results = [_result("efficiency", [])]
         report = grade_results(results, make_server_meta())
         assert report.dimension_scores[0].grade == Grade.A
         assert report.dimension_scores[0].score == 100.0
 
-    def test_low_findings_grade_A(self):
+    def test_low_findings_grade_a(self):
         results = [_result("efficiency", [_finding("e.x", Severity.LOW), _finding("e.y", Severity.INFO)])]
         report = grade_results(results, make_server_meta())
         assert report.dimension_scores[0].grade == Grade.A
 
-    def test_single_critical_caps_at_D(self):
+    def test_single_critical_caps_at_d(self):
         results = [_result("security", [_finding("s.x", Severity.CRITICAL)])]
         report = grade_results(results, make_server_meta())
         assert report.dimension_scores[0].grade == Grade.D
 
-    def test_two_criticals_forces_F(self):
+    def test_two_criticals_forces_f(self):
         findings = [_finding("s.x", Severity.CRITICAL), _finding("s.y", Severity.CRITICAL)]
         results = [_result("security", findings)]
         report = grade_results(results, make_server_meta())

@@ -11,8 +11,8 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from reviewmymcp.synthetic.agent_driver import StdioAgentDriver
 from reviewmymcp.ingest.schema import ToolDefinition
+from reviewmymcp.synthetic.agent_driver import StdioAgentDriver
 
 
 async def capture_server(name: str, command: list[str], output_path: Path) -> None:

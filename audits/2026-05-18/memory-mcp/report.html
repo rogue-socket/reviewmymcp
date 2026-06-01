@@ -32,7 +32,7 @@
 <table>
   <thead><tr><th>Dimension</th><th>Score</th><th>Grade</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Skipped</th></tr></thead>
   <tbody>
-  
+
   <tr>
     <td>accuracy</td>
     <td>100</td>
@@ -43,7 +43,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>compliance</td>
     <td>100</td>
@@ -54,7 +54,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>composability</td>
     <td>100</td>
@@ -65,7 +65,7 @@
     <td>-</td>
     <td>2</td>
   </tr>
-  
+
   <tr>
     <td>conformance</td>
     <td>100</td>
@@ -76,7 +76,7 @@
     <td>-</td>
     <td>-</td>
   </tr>
-  
+
   <tr>
     <td>discoverability</td>
     <td>80</td>
@@ -87,7 +87,7 @@
     <td>-</td>
     <td>-</td>
   </tr>
-  
+
   <tr>
     <td>efficiency</td>
     <td>100</td>
@@ -98,7 +98,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>performance</td>
     <td>100</td>
@@ -109,7 +109,7 @@
     <td>-</td>
     <td>2</td>
   </tr>
-  
+
   <tr>
     <td>reliability</td>
     <td>100</td>
@@ -120,7 +120,7 @@
     <td>-</td>
     <td>1</td>
   </tr>
-  
+
   <tr>
     <td>security</td>
     <td>100</td>
@@ -131,7 +131,7 @@
     <td>-</td>
     <td>-</td>
   </tr>
-  
+
   </tbody>
 </table>
 
@@ -142,23 +142,23 @@
 <table>
   <thead><tr><th>Check</th><th>Reason</th></tr></thead>
   <tbody>
-  
+
   <tr><td>efficiency.latency-cliff</td><td>fewer than 3 latency observations for 6 tool(s)</td></tr>
-  
+
   <tr><td>accuracy.output-schema-drift</td><td>fewer than 3 responses for 6 tool(s)</td></tr>
-  
+
   <tr><td>composability.idempotency-violation</td><td>fewer than 2 repeated call groups with 2+ successes (19 group(s) skipped)</td></tr>
-  
+
   <tr><td>composability.concurrency-safety</td><td>skipped 9 tool(s): need &gt;= 5 pairs and &gt;= 3 concurrent+sequential samples each</td></tr>
-  
+
   <tr><td>reliability.error-rate</td><td>fewer than 3 calls for 6 tool(s)</td></tr>
-  
+
   <tr><td>compliance.data-residency-signals</td><td>no expected_regions configured</td></tr>
-  
+
   <tr><td>performance.concurrent-session-scaling</td><td>need &gt;= 3 sessions, only 1 found</td></tr>
-  
+
   <tr><td>performance.throughput-degradation</td><td>need &gt;= 20 tool/call responses, only 19 found</td></tr>
-  
+
   </tbody>
 </table>
 
@@ -210,35 +210,35 @@
 
 <details>
   <summary>discoverability — 4 findings</summary>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>discoverability.description-clarity</strong>
     <p>Tool `create_entities` has unclear description (score 2/5)</p>
     <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>discoverability.description-clarity</strong>
     <p>Tool `add_observations` has unclear description (score 2/5)</p>
     <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>discoverability.description-clarity</strong>
     <p>Tool `read_graph` has unclear description (score 2/5)</p>
     <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
   </div>
-  
+
   <div class="finding finding-medium">
     <span class="severity-medium">[MEDIUM]</span>
     <strong>discoverability.description-clarity</strong>
     <p>Tool `open_nodes` has unclear description (score 2/5)</p>
     <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
   </div>
-  
+
 </details>
 
 

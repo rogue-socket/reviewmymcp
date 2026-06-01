@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from reviewmymcp.ingest.schema import McpEvent, ServerMeta
+from reviewmymcp.ingest.schema import ServerMeta
 
 
 class TaskCategory(StrEnum):

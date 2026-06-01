@@ -17,7 +17,7 @@ from reviewmymcp.evaluators.reliability.checks import ReliabilityEvaluator
 from reviewmymcp.ingest.correlator import correlate
 from reviewmymcp.ingest.file_loader import load_file
 from reviewmymcp.ingest.schema import ServerMeta
-from tests.conftest import make_event, make_tool_call_pair
+from tests.conftest import make_tool_call_pair
 
 
 def test_parser_reads_probe_fields_from_wrapper(tmp_path: Path) -> None:

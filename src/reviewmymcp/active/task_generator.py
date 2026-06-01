@@ -6,7 +6,6 @@ from reviewmymcp.active.models import ActiveTask, TaskCategory
 from reviewmymcp.ingest.schema import ToolDefinition
 from reviewmymcp.judge.base import JudgeRequest, JudgeResponse, parse_json_response
 
-
 TASK_SYSTEM = """\
 You generate test tasks for an MCP server's tools. Each task is a natural-language \
 instruction that an LLM agent should try to accomplish using the available tools.
