@@ -1,5 +1,7 @@
 """Tests for the active check scorer."""
 
+import json
+
 from reviewmymcp.active.observer import Observation, SessionAnalysis, SignalType
 from reviewmymcp.active.scorer import compute_summary_stats, score_sessions
 from reviewmymcp.active.task_library import TaskCategory
@@ -124,3 +126,73 @@ def test_empty_analyses():
     meta = ServerMeta(server_name="test")
     report = score_sessions([], meta)
     assert report.overall_grade == Grade.A
+
+
+def test_active_report_json_output_contract():
+    observations = [
+        Observation(
+            signal=SignalType.INJECTION_IN_OUTPUT,
+            task_id="security_task",
+            category=TaskCategory.MULTI_STEP,
+            details="Tool output contained prompt injection",
+            evidence={"tool": "search_web", "patterns": ["<system>"]},
+            affected_tools=["search_web"],
+        ),
+        Observation(
+            signal=SignalType.ARG_STRUGGLE,
+            task_id="security_task",
+            category=TaskCategory.MULTI_STEP,
+            details="Agent needed two attempts",
+            evidence={"total_attempts": 2},
+            affected_tools=["save_report"],
+        ),
+    ]
+    report = score_sessions(
+        [_make_analysis("security_task", success=True, observations=observations, turns=4, tools=["search_web", "save_report"])],
+        ServerMeta(server_name="active-contract"),
+    )
+
+    parsed = json.loads(report.model_dump_json())
+
+    assert set(parsed) == {
+        "server_meta",
+        "overall_grade",
+        "dimension_scores",
+        "top_findings",
+        "total_events",
+        "total_sessions",
+        "timestamp",
+    }
+    assert parsed["overall_grade"] == "D"
+    assert parsed["total_events"] == 0
+    assert parsed["total_sessions"] == 1
+    assert len(parsed["dimension_scores"]) == 6
+
+    dimension = parsed["dimension_scores"][0]
+    assert {
+        "dimension",
+        "grade",
+        "critical_count",
+        "high_count",
+        "medium_count",
+        "low_count",
+        "info_count",
+        "findings",
+    } <= set(dimension)
+
+    finding_ids = {f["check_id"] for f in parsed["top_findings"]}
+    assert "active.injection-in-output" in finding_ids
+    assert "active.argument-difficulty" in finding_ids
+
+    first_finding = parsed["top_findings"][0]
+    assert first_finding["check_id"] == "active.injection-in-output"
+    assert first_finding["severity"] == "critical"
+    assert {
+        "check_id",
+        "severity",
+        "title",
+        "description",
+        "evidence",
+        "remediation",
+        "affected_entity",
+    } <= set(first_finding)
