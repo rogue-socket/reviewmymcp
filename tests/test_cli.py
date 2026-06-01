@@ -43,6 +43,20 @@ def test_replay_json(sample_stdio_log):
     assert "tool_count" in parsed
 
 
+def test_replay_json_reports_expected_fixture_findings(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    parsed = json.loads(result.output)
+    finding_ids = {f["check_id"] for f in parsed["top_findings"]}
+
+    assert parsed["call_count"] == 4
+    assert "accuracy.schema-misuse" in finding_ids
+    assert "composability.error-recovery-surface" in finding_ids
+    assert any(f["severity"] == "high" for f in parsed["top_findings"])
+
+
 def test_replay_persistence_path_option_flags_unsafe_default(sample_stdio_log):
     runner = CliRunner()
     result = runner.invoke(

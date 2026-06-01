@@ -181,6 +181,11 @@ Print all available evaluator checks with their dimensions.
 | 1 | Critical or high findings found / regressions detected | `audit`, `replay`, `diff` |
 | 2 | Could not run (bad config, missing target, connection failure) | all |
 
+For `audit` and `replay`, exit code `1` is a findings status, not an output failure.
+Machine-readable output such as `--output json --output-file report.json` is still written
+when high or critical findings are present. CI jobs that need to archive or parse the report
+should collect the output file before failing the build on exit code `1`.
+
 ## Evaluation Dimensions
 
 The tool evaluates MCP servers across 10 dimensions with 50+ total checks:
