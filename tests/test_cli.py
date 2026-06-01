@@ -34,6 +34,21 @@ def test_replay_terminal(sample_stdio_log):
     assert "Dimension Scores" in result.output
 
 
+def test_replay_terminal_output_contract(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    output = result.output
+    assert "MCP Server Audit Report" in output
+    assert "Server: TestServer v2.0.0" in output
+    assert "Events: 13  Sessions: 1  Tools: 7  Calls: 4" in output
+    assert "Dimension Scores" in output
+    assert "Top Findings" in output
+    assert "[HIGH] accuracy.schema-misuse" in output
+    assert "Fix:" in output
+
+
 def test_replay_json(sample_stdio_log):
     runner = CliRunner()
     result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
@@ -105,6 +120,34 @@ def test_replay_json_output_contract(sample_stdio_log):
         "remediation",
         "affected_entity",
     } <= set(first_finding)
+
+
+def test_replay_large_log_json_stability(sample_stdio_log, tmp_path):
+    records = [json.loads(line) for line in sample_stdio_log.read_text().splitlines()]
+    large_log = tmp_path / "large.ndjson"
+
+    with large_log.open("w") as f:
+        for session_idx in range(25):
+            id_offset = session_idx * 100
+            for record in records:
+                clone = dict(record)
+                clone["session_id"] = f"sess-large-{session_idx}"
+                if isinstance(clone.get("id"), int):
+                    clone["id"] += id_offset
+                f.write(json.dumps(clone) + "\n")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(large_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    parsed = json.loads(result.output)
+    assert parsed["total_events"] == 13 * 25
+    assert parsed["total_sessions"] == 25
+    assert parsed["tool_count"] == 7
+    assert parsed["call_count"] == 4 * 25
+    assert len(parsed["dimension_scores"]) == 10
+    assert len(parsed["top_findings"]) == 10
+    assert parsed["top_findings"][0]["severity"] == "high"
 
 
 def test_replay_persistence_path_option_flags_unsafe_default(sample_stdio_log):
