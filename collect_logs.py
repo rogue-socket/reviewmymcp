@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -135,6 +136,40 @@ def scenario_tool_gaps(scenarios: list[dict[str, Any]], tool_names: set[str]) ->
             if tool and tool not in tool_names:
                 gaps.append({"scenario": scenario_name, "tool": tool})
     return gaps
+
+
+def scenario_coverage_summary(scenarios: list[dict[str, Any]], events: list[McpEvent]) -> dict[str, Any]:
+    expected_tools = [
+        step["tool"]
+        for scenario in scenarios
+        for step in scenario.get("steps", [])
+        if step.get("tool")
+    ]
+    observed_tools = [
+        e.params.get("name")
+        for e in events
+        if e.is_request
+        and e.method == "tools/call"
+        and not e.is_probe
+        and isinstance(e.params, dict)
+        and e.params.get("name")
+    ]
+
+    expected_counts = Counter(expected_tools)
+    observed_counts = Counter(observed_tools)
+    missing_counts = {
+        tool: expected_count - observed_counts.get(tool, 0)
+        for tool, expected_count in expected_counts.items()
+        if observed_counts.get(tool, 0) < expected_count
+    }
+
+    return {
+        "expected_tool_call_steps": len(expected_tools),
+        "observed_scenario_tool_calls": len(observed_tools),
+        "expected_tools": sorted(expected_counts),
+        "observed_tools": sorted(observed_counts),
+        "missing_tool_call_counts": missing_counts,
+    }
 
 
 async def run_server_session(config: ServerConfig, timeout: int) -> list[McpEvent]:
@@ -325,7 +360,13 @@ async def main(output_dir: str, skip: list[str], timeout: int) -> None:
             write_ndjson(events, config.output_file)
 
             error_count = sum(1 for e in events if e.is_error)
+            coverage = scenario_coverage_summary(config.scenarios, events)
             print(f"  => Wrote {len(events)} events ({error_count} errors) to {config.output_file.name}")
+            print(
+                "  => Scenario coverage: "
+                f"{coverage['observed_scenario_tool_calls']}/{coverage['expected_tool_call_steps']} calls, "
+                f"missing={coverage['missing_tool_call_counts']}"
+            )
             total_events += len(events)
         except Exception as e:
             print(f"  [FATAL] {config.name} failed completely: {e}")
