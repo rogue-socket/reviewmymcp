@@ -176,12 +176,6 @@ class ConformanceEvaluator:
             declared = getattr(caps, cap_name, False)
             used = [m for m in methods if m in methods_used]
 
-            if declared and not used:
-                response_methods = [m for m in methods if any(e.is_response and e.method == m for e in events)]
-                request_methods = [m for m in methods if any(e.is_request and e.method == m for e in events)]
-                if not request_methods and not response_methods:
-                    pass  # capability declared but never exercised — not necessarily a problem
-
             if not declared and used:
                 findings.append(
                     Finding(

@@ -114,10 +114,6 @@ class HttpProxy:
     ) -> StreamingResponse:
         async def event_stream():
             async with self._client.stream("POST", url, headers=headers, content=body) as response:
-                if not session_id:
-                    new_sid = response.headers.get("mcp-session-id")
-                    if new_sid:
-                        pass  # would need to set on response headers
                 sse_buffer = ""
                 async for chunk in response.aiter_text():
                     sse_buffer += chunk
