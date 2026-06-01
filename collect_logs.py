@@ -212,11 +212,11 @@ async def run_server_session(config: ServerConfig, timeout: int) -> list[McpEven
             except Exception as e:
                 print(f"    [ERROR] Scenario {name}: {e}")
 
-        print(f"  Running edge probes...")
+        print("  Running edge probes...")
         try:
             await asyncio.wait_for(driver.execute_edge_probes(), timeout=timeout)
         except TimeoutError:
-            print(f"    [TIMEOUT] Edge probes timed out")
+            print("    [TIMEOUT] Edge probes timed out")
         except Exception as e:
             print(f"    [ERROR] Edge probes: {e}")
 
@@ -248,7 +248,7 @@ async def run_server_session(config: ServerConfig, timeout: int) -> list[McpEven
             all_events.extend(burst_events)
             print(f"    Burst captured {len(burst_events)} events")
         except TimeoutError:
-            print(f"    [TIMEOUT] Concurrent burst timed out")
+            print("    [TIMEOUT] Concurrent burst timed out")
         except Exception as e:
             print(f"    [ERROR] Concurrent burst: {e}")
 
