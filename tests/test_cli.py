@@ -57,6 +57,56 @@ def test_replay_json_reports_expected_fixture_findings(sample_stdio_log):
     assert any(f["severity"] == "high" for f in parsed["top_findings"])
 
 
+def test_replay_json_output_contract(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    parsed = json.loads(result.output)
+
+    assert set(parsed) == {
+        "server_meta",
+        "dimension_scores",
+        "top_findings",
+        "total_events",
+        "total_sessions",
+        "tool_count",
+        "call_count",
+        "timestamp",
+    }
+    assert parsed["total_events"] == 13
+    assert parsed["total_sessions"] == 1
+    assert parsed["tool_count"] == 7
+    assert parsed["call_count"] == 4
+
+    first_dimension = parsed["dimension_scores"][0]
+    assert {
+        "dimension",
+        "score",
+        "grade",
+        "critical_count",
+        "high_count",
+        "medium_count",
+        "low_count",
+        "info_count",
+        "findings",
+        "checks_skipped",
+    } <= set(first_dimension)
+
+    first_finding = parsed["top_findings"][0]
+    assert first_finding["check_id"] == "accuracy.schema-misuse"
+    assert first_finding["severity"] == "high"
+    assert {
+        "check_id",
+        "severity",
+        "title",
+        "description",
+        "evidence",
+        "remediation",
+        "affected_entity",
+    } <= set(first_finding)
+
+
 def test_replay_persistence_path_option_flags_unsafe_default(sample_stdio_log):
     runner = CliRunner()
     result = runner.invoke(
