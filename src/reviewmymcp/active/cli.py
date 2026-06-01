@@ -131,11 +131,11 @@ def _render_active_terminal(result) -> None:
     from reviewmymcp.evaluators.base import Severity
     from reviewmymcp.scoring.grader import Grade
 
-    GRADE_COLORS = {
+    grade_colors = {
         Grade.A: "green", Grade.B: "blue", Grade.C: "yellow",
         Grade.D: "red", Grade.F: "bold red",
     }
-    SEVERITY_COLORS = {
+    severity_colors = {
         Severity.CRITICAL: "bold red", Severity.HIGH: "red",
         Severity.MEDIUM: "yellow", Severity.LOW: "cyan", Severity.INFO: "dim",
     }
@@ -157,7 +157,7 @@ def _render_active_terminal(result) -> None:
 
     grade_text = Text(
         f"  {report.overall_grade.value}  ",
-        style=f"bold {GRADE_COLORS.get(report.overall_grade, 'white')} on black",
+        style=f"bold {grade_colors.get(report.overall_grade, 'white')} on black",
     )
     header.append("\nOverall Grade: ")
     header.append(grade_text)
@@ -191,7 +191,7 @@ def _render_active_terminal(result) -> None:
     dim_table.add_column("Low", justify="right")
 
     for ds in sorted(report.dimension_scores, key=lambda d: d.dimension):
-        grade_style = GRADE_COLORS.get(ds.grade, "white")
+        grade_style = grade_colors.get(ds.grade, "white")
         dim_table.add_row(
             ds.dimension,
             Text(ds.grade.value, style=grade_style),
@@ -206,7 +206,7 @@ def _render_active_terminal(result) -> None:
     if report.top_findings:
         console.print("\n[bold]Top Findings[/bold]")
         for i, finding in enumerate(report.top_findings, 1):
-            sev_style = SEVERITY_COLORS.get(finding.severity, "white")
+            sev_style = severity_colors.get(finding.severity, "white")
             console.print(
                 f"\n  {i}. [{sev_style}][{finding.severity.value.upper()}][/{sev_style}] {finding.check_id}"
             )

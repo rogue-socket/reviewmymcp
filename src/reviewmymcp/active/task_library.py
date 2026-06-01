@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from enum import StrEnum
+
 from pydantic import BaseModel, Field
 
 from reviewmymcp.ingest.schema import ToolDefinition
