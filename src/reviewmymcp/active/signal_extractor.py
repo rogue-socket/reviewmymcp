@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 from reviewmymcp.active.models import ActiveTask, AgentTurn, BehavioralSignal
+
+INJECTION_RE = re.compile(
+    r"(ignore (?:all )?(?:previous|prior) instructions|<system>|</system>|exfiltrate|reveal (?:secrets|tokens))",
+    re.IGNORECASE,
+)
+EXTERNAL_TOOL_RE = re.compile(r"\b(web|search|url|fetch|http|internet|browser)\b", re.IGNORECASE)
+PROVENANCE_RE = re.compile(r"(<external_source\b|https?://|\bsource\s*:|\burl\s*:)", re.IGNORECASE)
 
 
 def extract_turn_signals(
@@ -64,14 +74,21 @@ def extract_task_signals(
     task: ActiveTask,
     available_tools: set[str],
     max_turns: int,
+    tool_descriptions: dict[str, str] | None = None,
 ) -> list[BehavioralSignal]:
     """Extract aggregate signals for a completed task execution."""
     all_signals: list[BehavioralSignal] = []
+    descriptions = tool_descriptions or {}
+
+    for name, description in descriptions.items():
+        if _contains_injection(description):
+            all_signals.append(BehavioralSignal.INJECTION_IN_DESCRIPTION)
 
     for i, turn in enumerate(turns):
         turn_signals = extract_turn_signals(turn, turns[:i], available_tools, task.expected_tools)
         turn.signals = turn_signals
         all_signals.extend(turn_signals)
+        all_signals.extend(_extract_security_signals(turn, descriptions))
 
     # Terminal signals
     if turns:
@@ -119,3 +136,51 @@ def _is_retry_after_error(tool_name: str, prev_turns: list[AgentTurn]) -> bool:
             if tc.tool_name == tool_name and tc.is_error:
                 return True
     return False
+
+
+def _extract_security_signals(turn: AgentTurn, tool_descriptions: dict[str, str]) -> list[BehavioralSignal]:
+    signals: list[BehavioralSignal] = []
+    for tc in turn.tool_calls:
+        if tc.is_error:
+            continue
+        text = _result_text(tc.result)
+        if not text:
+            continue
+        if _contains_injection(text):
+            signals.append(BehavioralSignal.INJECTION_IN_OUTPUT)
+        tool_context = f"{tc.tool_name} {tool_descriptions.get(tc.tool_name, '')}"
+        if _looks_external_tool(tool_context) and not _has_provenance(text):
+            signals.append(BehavioralSignal.UNTRUSTED_CONTENT_NO_PROVENANCE)
+    return signals
+
+
+def _result_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(_result_text(item) for item in value)
+    if not isinstance(value, dict):
+        return ""
+
+    content = value.get("content")
+    if isinstance(content, list):
+        return "\n".join(
+            item["text"]
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        )
+    return "\n".join(_result_text(nested) for nested in value.values())
+
+
+def _contains_injection(text: str) -> bool:
+    return bool(text and INJECTION_RE.search(text))
+
+
+def _looks_external_tool(text: str) -> bool:
+    return bool(text and EXTERNAL_TOOL_RE.search(text))
+
+
+def _has_provenance(text: str) -> bool:
+    return bool(text and PROVENANCE_RE.search(text))

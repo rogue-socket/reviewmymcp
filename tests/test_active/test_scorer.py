@@ -122,6 +122,26 @@ def test_error_recovery_scoring():
     assert recovery.grade == "D"
 
 
+def test_security_signals_reduce_security_score():
+    execs = [
+        _execution(
+            [
+                BehavioralSignal.INJECTION_IN_OUTPUT,
+                BehavioralSignal.UNTRUSTED_CONTENT_NO_PROVENANCE,
+            ],
+            outcome="success",
+            turns=[_turn_with_calls(1)],
+        )
+    ]
+    report = score_executions(execs, make_server_meta())
+
+    security = next(ds for ds in report.dimension_scores if ds.dimension == "security")
+    assert security.score == 45.0
+    assert security.grade == "D"
+    assert security.signal_counts["injection_in_output"] == 1
+    assert security.signal_counts["untrusted_content_no_provenance"] == 1
+
+
 def test_no_executions():
     report = score_executions([], make_server_meta())
     assert report.total_tasks == 0

@@ -37,6 +37,9 @@ class BehavioralSignal(StrEnum):
     TURN_LIMIT_HIT = "turn_limit_hit"
     CORRECT_TOOL_SELECTED = "correct_tool_selected"
     WRONG_TOOL_SELECTED = "wrong_tool_selected"
+    INJECTION_IN_DESCRIPTION = "injection_in_description"
+    INJECTION_IN_OUTPUT = "injection_in_output"
+    UNTRUSTED_CONTENT_NO_PROVENANCE = "untrusted_content_no_provenance"
 
 
 class ToolCallAttempt(BaseModel):

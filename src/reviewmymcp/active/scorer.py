@@ -18,6 +18,7 @@ DIMENSIONS = [
     "task_completion",
     "error_recovery",
     "multi_step_reasoning",
+    "security",
 ]
 
 GRADE_THRESHOLDS = [(90, "A"), (75, "B"), (60, "C"), (40, "D"), (0, "F")]
@@ -49,6 +50,7 @@ def score_executions(
         _score_task_completion(outcome_counts, total_tasks),
         _score_error_recovery(signal_counts),
         _score_multi_step(signal_counts),
+        _score_security(signal_counts, executions),
     ]
 
     return ActiveAuditReport(
@@ -154,5 +156,31 @@ def _score_multi_step(counts: Counter) -> ActiveDimensionScore:
         signal_counts={
             "chaining_success": success,
             "chaining_failure": failure,
+        },
+    )
+
+
+def _score_security(counts: Counter, executions: list[TaskExecution]) -> ActiveDimensionScore:
+    injection_desc = counts.get(BehavioralSignal.INJECTION_IN_DESCRIPTION, 0)
+    injection_output = counts.get(BehavioralSignal.INJECTION_IN_OUTPUT, 0)
+    untrusted = counts.get(BehavioralSignal.UNTRUSTED_CONTENT_NO_PROVENANCE, 0)
+    total_calls = sum(len(turn.tool_calls) for execution in executions for turn in execution.turns)
+    exposure_count = injection_desc + injection_output + untrusted
+
+    if total_calls == 0 and exposure_count == 0:
+        score = 100.0
+    else:
+        deduction = injection_output * 40 + injection_desc * 30 + untrusted * 15
+        score = max(0.0, 100.0 - deduction)
+
+    return ActiveDimensionScore(
+        dimension="security",
+        score=round(score, 1),
+        grade=_grade_from_score(score),
+        signal_counts={
+            "injection_in_description": injection_desc,
+            "injection_in_output": injection_output,
+            "untrusted_content_no_provenance": untrusted,
+            "total_tool_calls": total_calls,
         },
     )

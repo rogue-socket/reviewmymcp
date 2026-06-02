@@ -127,7 +127,8 @@ class AgentLoop:
             messages.append({"role": "user", "content": tool_results})
 
         # Extract signals and determine outcome
-        signals = extract_task_signals(turns, task, self._tool_names, self._max_turns)
+        tool_descriptions = {tool.name: tool.description for tool in self._tools}
+        signals = extract_task_signals(turns, task, self._tool_names, self._max_turns, tool_descriptions)
         outcome = determine_outcome(signals, task)
 
         return TaskExecution(
