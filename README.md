@@ -39,7 +39,7 @@ The pipeline:
 2. **Generate tasks** across 6 categories (discovery, single-tool, multi-step, error recovery, ambiguous, edge case)
 3. **Run an LLM agent** through each task — it decides which tools to call, how to build arguments, and how to handle errors
 4. **Observe** the agent's behavior: did it find the right tool? struggle with arguments? recover from errors? successfully chain calls?
-5. **Score** the observations into findings across 5 dimensions (discoverability, reliability, composability, efficiency, accuracy)
+5. **Score** the observations into findings across 6 dimensions (discoverability, reliability, composability, efficiency, accuracy, security)
 6. **Grade** using the same A-F grading engine as the passive audit
 
 ## Setup
@@ -150,7 +150,7 @@ With an LLM provider configured, tasks are generated dynamically based on the ac
 
 ## Behavioral Signals
 
-The observer watches each agent session and extracts 16 behavioral signals:
+The observer watches each agent session and extracts 19 behavioral signals:
 
 ### Positive signals (things going well)
 
@@ -177,6 +177,9 @@ The observer watches each agent session and extracts 16 behavioral signals:
 | `chaining_failure` | Couldn't chain expected tools together | composability |
 | `tool_confusion` | Confused about which tool to use | discoverability |
 | `description_mismatch` | Tool behavior didn't match its description | accuracy |
+| `injection_in_description` | Tool description contains prompt-injection-style phrasing | security |
+| `injection_in_output` | Tool output contains prompt-injection patterns | security |
+| `untrusted_content_no_provenance` | External/web content lacks provenance markers | security |
 
 ## Scoring
 
@@ -189,6 +192,7 @@ Negative signals are mapped to findings with severity levels, grouped by dimensi
 | **Composability** | Can tools be chained? Can agents complete workflows? |
 | **Efficiency** | How many turns does the agent need? |
 | **Accuracy** | Does tool behavior match descriptions? |
+| **Security** | Do tool descriptions and outputs expose prompt-injection or untrusted-content risks? |
 
 Grading uses the same engine as the passive audit:
 
@@ -206,7 +210,7 @@ Grading uses the same engine as the passive audit:
 |---|---|---|
 | **Input** | Captured log files | Live MCP server |
 | **What it measures** | Protocol correctness, performance, security | Agent usability, discoverability, workflow support |
-| **Dimensions** | 9 (42 checks) | 5 (agent-behavioral) |
+| **Dimensions** | 9 (42 checks) | 6 (agent-behavioral) |
 | **LLM required** | Optional (4 judge checks) | Required (agent + task generation) |
 | **Best for** | CI gating, regression detection, compliance | Design feedback, UX evaluation, pre-release testing |
 | **Analogy** | Code review | User testing |
