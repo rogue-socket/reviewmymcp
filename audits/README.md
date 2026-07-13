@@ -7,6 +7,9 @@ Archived runs of `reviewmymcp` against real, public MCP servers. Each dated fold
 | Date | Servers | Notes |
 |---|---|---|
 | [2026-05-18](./2026-05-18/) | Memory (official), Sentry (official), DuckDuckGo (community) | Baseline comparison across three quality tiers. First run with the Claude Agent SDK judge integration. Includes cross-check of DDG audit findings against published source code. |
+| [2026-05-31](./2026-05-31/) | Everything, filesystem, GitHub, Playwright, web search | Fixture replay and source cross-check across protocol, local-state, hosted API, browser, and third-party scraper surfaces. |
+
+See the [validation matrix](./VALIDATION-MATRIX.md) for the complete indexed coverage and safety boundaries.
 
 ## Purpose
 
