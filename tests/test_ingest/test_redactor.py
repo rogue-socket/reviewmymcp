@@ -66,6 +66,21 @@ def test_redact_dict_sensitive_keys():
     assert "authorization" in fields
 
 
+def test_redact_dict_sensitive_key_variants_and_nested_credentials():
+    data = {
+        "access_token": "short-token",
+        "refreshToken": "another-token",
+        "client_secret": "client-secret",
+        "cookies": {"session": "session-secret"},
+        "credentials": {"password": "password-secret"},
+    }
+
+    redacted, fields = redact_dict(data)
+
+    assert all(value == "[REDACTED:header]" for value in redacted.values())
+    assert set(fields) == set(data)
+
+
 def test_redact_dict_extra_patterns():
     data = {"employee_id": "EMP-AB1234"}
     redacted, fields = redact_dict(data, extra_patterns=[r"EMP-[A-Z]{2}\d{4}"])

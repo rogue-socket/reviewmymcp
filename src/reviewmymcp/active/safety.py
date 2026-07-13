@@ -23,6 +23,7 @@ import json
 from pathlib import Path
 
 from reviewmymcp.active.models import TaskExecution
+from reviewmymcp.ingest.redactor import redact_dict
 from reviewmymcp.ingest.schema import ToolDefinition
 
 # Conservative prefix list. False positives (e.g. ``set_logging_level``) are
@@ -30,10 +31,27 @@ from reviewmymcp.ingest.schema import ToolDefinition
 # must look at, not to perfectly classify. Mirrors the read-only sampling
 # heuristic in the harare collector's edge_probes.py; keep the two in sync.
 WRITE_PREFIXES: tuple[str, ...] = (
-    "create_", "push_", "update_", "delete_", "merge_", "fork_",
-    "add_", "write_", "move_", "edit_", "remove_", "set_",
-    "post_", "put_", "patch_", "upload_", "publish_", "send_",
-    "commit_", "rename_", "archive_",
+    "create_",
+    "push_",
+    "update_",
+    "delete_",
+    "merge_",
+    "fork_",
+    "add_",
+    "write_",
+    "move_",
+    "edit_",
+    "remove_",
+    "set_",
+    "post_",
+    "put_",
+    "patch_",
+    "upload_",
+    "publish_",
+    "send_",
+    "commit_",
+    "rename_",
+    "archive_",
 )
 
 
@@ -51,9 +69,8 @@ def write_trace(executions: list[TaskExecution], path: Path) -> None:
     """Write one JSONL record per (task, turn) to ``path``.
 
     Each record carries the agent's text response, stop reason, and every
-    tool call's name / arguments / result / error status. Values are whatever
-    the driver captured — the redactor in StdioAgentDriver already sanitizes
-    secrets at capture time when ``redact=True``.
+    tool call's name / arguments / result / error status. Records are redacted
+    immediately before they are written, including secrets returned by a tool.
     """
     with path.open("w", encoding="utf-8") as f:
         for execution in executions:
@@ -75,4 +92,5 @@ def write_trace(executions: list[TaskExecution], path: Path) -> None:
                         for tc in turn.tool_calls
                     ],
                 }
-                f.write(json.dumps(record, default=str) + "\n")
+                redacted_record, _ = redact_dict(record)
+                f.write(json.dumps(redacted_record, default=str) + "\n")

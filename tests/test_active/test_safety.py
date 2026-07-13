@@ -118,6 +118,34 @@ def test_write_trace_handles_multiple_executions(tmp_path: Path):
     ]
 
 
+def test_write_trace_redacts_tool_arguments_and_results(tmp_path: Path):
+    execution = TaskExecution(
+        task=ActiveTask(category=TaskCategory.SINGLE_TOOL, description="Authenticate"),
+        turns=[
+            AgentTurn(
+                turn_number=1,
+                tool_calls=[
+                    ToolCallAttempt(
+                        tool_name="login",
+                        arguments={"access_token": "short-token"},
+                        result={"credentials": {"client_secret": "client-secret"}},
+                    )
+                ],
+            )
+        ],
+    )
+    path = tmp_path / "trace.jsonl"
+
+    write_trace([execution], path)
+
+    trace = path.read_text()
+    assert "short-token" not in trace
+    assert "client-secret" not in trace
+    record = json.loads(trace)
+    assert record["tool_calls"][0]["arguments"] == {"access_token": "[REDACTED:header]"}
+    assert record["tool_calls"][0]["result"] == {"credentials": "[REDACTED:header]"}
+
+
 def test_active_audit_refuses_mutating_server_without_flag():
     """End-to-end: CLI exits 2 with a clear message when mutators are detected."""
     from unittest.mock import AsyncMock, patch
@@ -133,19 +161,23 @@ def test_active_audit_refuses_mutating_server_without_flag():
     fake_driver.send_initialized = AsyncMock()
     fake_driver.stop = AsyncMock()
     fake_driver.events = []
-    fake_driver.list_tools = AsyncMock(return_value={
-        "result": {
-            "tools": [
-                {"name": "get_issue", "description": "Read an issue", "inputSchema": {}},
-                {"name": "create_repository", "description": "Create a repo", "inputSchema": {}},
-                {"name": "delete_branch", "description": "Delete a branch", "inputSchema": {}},
-            ]
+    fake_driver.list_tools = AsyncMock(
+        return_value={
+            "result": {
+                "tools": [
+                    {"name": "get_issue", "description": "Read an issue", "inputSchema": {}},
+                    {"name": "create_repository", "description": "Create a repo", "inputSchema": {}},
+                    {"name": "delete_branch", "description": "Delete a branch", "inputSchema": {}},
+                ]
+            }
         }
-    })
+    )
 
-    with patch("reviewmymcp.synthetic.agent_driver.StdioAgentDriver", return_value=fake_driver), \
-         patch("reviewmymcp.cli._build_agent_provider", return_value=object()), \
-         patch("reviewmymcp.cli._build_judge", return_value=None):
+    with (
+        patch("reviewmymcp.synthetic.agent_driver.StdioAgentDriver", return_value=fake_driver),
+        patch("reviewmymcp.cli._build_agent_provider", return_value=object()),
+        patch("reviewmymcp.cli._build_judge", return_value=None),
+    ):
         runner = CliRunner()
         result = runner.invoke(cli, ["active-audit", "fake-server"])
 

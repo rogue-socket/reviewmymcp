@@ -215,7 +215,9 @@ def test_large_multi_step_security_recovery_signals():
                 )
             ],
         ),
-        _turn(turn_number=4, tool_calls=[_tc("summarize_page", result={"content": [{"type": "text", "text": "fixed"}]})]),
+        _turn(
+            turn_number=4, tool_calls=[_tc("summarize_page", result={"content": [{"type": "text", "text": "fixed"}]})]
+        ),
         _turn(turn_number=5, tool_calls=[_tc("save_report", is_error=True, result={"error": "something went wrong"})]),
         _turn(turn_number=6, tool_calls=[_tc("save_report", result={"content": [{"type": "text", "text": "saved"}]})]),
         _turn(turn_number=7, tool_calls=[_tc("send_email", result={"content": [{"type": "text", "text": "sent"}]})]),

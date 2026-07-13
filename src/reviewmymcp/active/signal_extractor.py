@@ -52,9 +52,7 @@ def extract_turn_signals(
 
     # Chaining: used output from a previous tool call as input to a new one
     if turn.tool_calls and prev_turns:
-        prev_had_success = any(
-            tc for pt in prev_turns for tc in pt.tool_calls if not tc.is_error and tc.result
-        )
+        prev_had_success = any(tc for pt in prev_turns for tc in pt.tool_calls if not tc.is_error and tc.result)
         if prev_had_success and turn.tool_calls:
             if any(tc.is_error for tc in turn.tool_calls):
                 signals.append(BehavioralSignal.CHAINING_FAILURE)
@@ -167,9 +165,7 @@ def _result_text(value: Any) -> str:
     content = value.get("content")
     if isinstance(content, list):
         return "\n".join(
-            item["text"]
-            for item in content
-            if isinstance(item, dict) and isinstance(item.get("text"), str)
+            item["text"] for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)
         )
     return "\n".join(_result_text(nested) for nested in value.values())
 

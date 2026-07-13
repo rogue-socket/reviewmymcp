@@ -83,31 +83,32 @@ class AgentLoop:
                     call_id=tc.call_id,
                 )
 
-                try:
-                    result = await self._call_tool(tc.tool_name, tc.arguments)
-                except Exception as exc:
-                    result = {"error": f"tool call failed: {exc}"}
-                if result is None:
+                if tc.tool_name not in self._tool_names:
                     attempt.is_error = True
-                    attempt.result = {"error": "timeout or connection error"}
-                elif "error" in result:
-                    attempt.is_error = True
-                    attempt.result = result
-                elif result.get("result", {}).get("isError"):
-                    attempt.is_error = True
-                    attempt.result = result.get("result", {})
+                    attempt.result = {"error": f"Tool `{tc.tool_name}` is not available to this audit."}
                 else:
-                    attempt.result = result.get("result", result)
-
+                    try:
+                        result = await self._call_tool(tc.tool_name, tc.arguments)
+                    except Exception as exc:
+                        result = {"error": f"tool call failed: {exc}"}
+                    if result is None:
+                        attempt.is_error = True
+                        attempt.result = {"error": "timeout or connection error"}
+                    elif "error" in result:
+                        attempt.is_error = True
+                        attempt.result = result
+                    elif result.get("result", {}).get("isError"):
+                        attempt.is_error = True
+                        attempt.result = result.get("result", {})
+                    else:
+                        attempt.result = result.get("result", result)
                 turn.tool_calls.append(attempt)
 
                 # Build tool_result message for the LLM
                 import json
 
                 content = json.dumps(attempt.result) if attempt.result else '{"error": "no response"}'
-                tool_results.append(
-                    {"type": "tool_result", "tool_use_id": tc.call_id, "content": content}
-                )
+                tool_results.append({"type": "tool_result", "tool_use_id": tc.call_id, "content": content})
 
             turns.append(turn)
 
@@ -117,12 +118,14 @@ class AgentLoop:
             if response.text:
                 assistant_content.append({"type": "text", "text": response.text})
             for tc in response.tool_calls:
-                assistant_content.append({
-                    "type": "tool_use",
-                    "id": tc.call_id,
-                    "name": tc.tool_name,
-                    "input": tc.arguments,
-                })
+                assistant_content.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc.call_id,
+                        "name": tc.tool_name,
+                        "input": tc.arguments,
+                    }
+                )
             messages.append({"role": "assistant", "content": assistant_content})
             messages.append({"role": "user", "content": tool_results})
 

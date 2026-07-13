@@ -38,13 +38,15 @@ def _make_task(category=TaskCategory.SINGLE_TOOL, expected_tools=None):
 @pytest.mark.asyncio
 async def test_single_tool_call_then_stop():
     """Agent makes one tool call, gets result, then stops with text."""
-    agent = MockAgentProvider([
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
-            stop_reason="tool_use",
-        ),
-        AgentTurnResponse(text="Found results.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(text="Found results.", stop_reason="end_turn"),
+        ]
+    )
     mock_tool = MockCallTool()
     loop = AgentLoop(agent_provider=agent, call_tool_fn=mock_tool, tools=_make_tools())
 
@@ -86,9 +88,11 @@ async def test_turn_limit_hit():
 @pytest.mark.asyncio
 async def test_tool_definitions_passed_to_provider():
     """Verify that tool definitions are correctly passed to the LLM provider."""
-    agent = MockAgentProvider([
-        AgentTurnResponse(text="Done.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(text="Done.", stop_reason="end_turn"),
+        ]
+    )
     tools = _make_tools()
     loop = AgentLoop(agent_provider=agent, call_tool_fn=MockCallTool(), tools=tools)
 
@@ -103,21 +107,45 @@ async def test_tool_definitions_passed_to_provider():
 
 
 @pytest.mark.asyncio
+async def test_unlisted_tool_call_is_rejected_without_dispatch():
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="delete_item", arguments={"id": "1"}, call_id="c1")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(text="I cannot use that tool.", stop_reason="end_turn"),
+        ]
+    )
+    mock_tool = MockCallTool()
+    loop = AgentLoop(agent_provider=agent, call_tool_fn=mock_tool, tools=_make_tools())
+
+    result = await loop.execute_task(_make_task())
+
+    assert mock_tool.calls == []
+    attempt = result.turns[0].tool_calls[0]
+    assert attempt.is_error is True
+    assert attempt.result == {"error": "Tool `delete_item` is not available to this audit."}
+
+
+@pytest.mark.asyncio
 async def test_error_recovery():
     """Agent calls tool, gets error, retries with different args, succeeds."""
-    agent = MockAgentProvider([
-        # First attempt — will get error
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="search", arguments={"q": ""}, call_id="c1")],
-            stop_reason="tool_use",
-        ),
-        # Retry — will succeed
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c2")],
-            stop_reason="tool_use",
-        ),
-        AgentTurnResponse(text="Found results.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            # First attempt — will get error
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="search", arguments={"q": ""}, call_id="c1")],
+                stop_reason="tool_use",
+            ),
+            # Retry — will succeed
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c2")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(text="Found results.", stop_reason="end_turn"),
+        ]
+    )
 
     call_count = 0
 
@@ -139,9 +167,11 @@ async def test_error_recovery():
 @pytest.mark.asyncio
 async def test_gave_up():
     """Agent produces text indicating it cannot complete the task."""
-    agent = MockAgentProvider([
-        AgentTurnResponse(text="I'm sorry, I cannot complete this task.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(text="I'm sorry, I cannot complete this task.", stop_reason="end_turn"),
+        ]
+    )
     loop = AgentLoop(agent_provider=agent, call_tool_fn=MockCallTool(), tools=_make_tools())
 
     result = await loop.execute_task(_make_task())
@@ -154,17 +184,19 @@ async def test_gave_up():
 @pytest.mark.asyncio
 async def test_chaining_two_tools():
     """Agent calls tool A, then uses result to call tool B."""
-    agent = MockAgentProvider([
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
-            stop_reason="tool_use",
-        ),
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="get_item", arguments={"id": "123"}, call_id="c2")],
-            stop_reason="tool_use",
-        ),
-        AgentTurnResponse(text="Got the item.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="get_item", arguments={"id": "123"}, call_id="c2")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(text="Got the item.", stop_reason="end_turn"),
+        ]
+    )
     mock_tool = MockCallTool()
     task = _make_task(
         category=TaskCategory.MULTI_STEP,
@@ -182,13 +214,16 @@ async def test_chaining_two_tools():
 @pytest.mark.asyncio
 async def test_tool_not_found():
     """Agent tries to call a tool that doesn't exist on the server."""
-    agent = MockAgentProvider([
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="nonexistent", arguments={}, call_id="c1")],
-            stop_reason="tool_use",
-        ),
-        AgentTurnResponse(text="That tool doesn't exist.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="nonexistent", arguments={}, call_id="c1")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(text="That tool doesn't exist.", stop_reason="end_turn"),
+        ]
+    )
+
     async def tool_fn(name, args):
         return None  # timeout / not found
 
@@ -217,13 +252,15 @@ async def test_provider_failure_becomes_gave_up_trace():
 
 @pytest.mark.asyncio
 async def test_tool_call_exception_is_recorded_as_attempt_error():
-    agent = MockAgentProvider([
-        AgentTurnResponse(
-            tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
-            stop_reason="tool_use",
-        ),
-        AgentTurnResponse(text="I cannot continue after the tool failed.", stop_reason="end_turn"),
-    ])
+    agent = MockAgentProvider(
+        [
+            AgentTurnResponse(
+                tool_calls=[AgentToolCall(tool_name="search", arguments={"q": "test"}, call_id="c1")],
+                stop_reason="tool_use",
+            ),
+            AgentTurnResponse(text="I cannot continue after the tool failed.", stop_reason="end_turn"),
+        ]
+    )
 
     async def failing_tool(name, args):
         raise RuntimeError("server disconnected")

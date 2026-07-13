@@ -22,6 +22,22 @@ BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")),
 ]
 
+SENSITIVE_KEY_NAMES = {
+    "apikey",
+    "auth",
+    "authorization",
+    "clientsecret",
+    "cookie",
+    "cookies",
+    "credential",
+    "credentials",
+    "password",
+    "privatekey",
+    "refreshtoken",
+    "secret",
+    "token",
+}
+
 
 def _compile_extra_patterns(extra: list[str]) -> list[tuple[str, re.Pattern[str]]]:
     compiled = []
@@ -46,6 +62,11 @@ def redact_string(
     return value, redaction_types
 
 
+def _is_sensitive_key(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]", "", key.lower())
+    return normalized in SENSITIVE_KEY_NAMES or normalized.endswith(("token", "secret", "password"))
+
+
 def redact_dict(
     data: dict[str, Any],
     patterns: list[tuple[str, re.Pattern[str]]] | None = None,
@@ -64,19 +85,10 @@ def redact_dict(
     for key, value in data.items():
         current_path = f"{_path}.{key}" if _path else key
 
-        if key.lower() in (
-            "authorization",
-            "auth",
-            "token",
-            "password",
-            "secret",
-            "api_key",
-            "apikey",
-        ):
-            if isinstance(value, str) and value:
-                result[key] = "[REDACTED:header]"
-                redacted_fields.append(current_path)
-                continue
+        if _is_sensitive_key(key) and value is not None:
+            result[key] = "[REDACTED:header]"
+            redacted_fields.append(current_path)
+            continue
 
         if isinstance(value, str):
             redacted_value, types = redact_string(value, patterns)
