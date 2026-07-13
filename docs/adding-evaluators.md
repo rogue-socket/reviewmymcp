@@ -163,10 +163,12 @@ def is_success(resp: McpEvent) -> bool:
     return not resp.is_error and (resp.result is None or not resp.result.get("isError"))
 ```
 
-### Using configurable thresholds
+### Thresholds
+
+Efficiency checks can read documented values from `EvaluatorConfig.thresholds`. Keep each key stable, include it in the audit configuration reference, and add focused tests for the default and configured behavior.
 
 ```python
-threshold = config.thresholds.get("my_check_threshold", 500)  # default 500
+threshold = config.thresholds.get("my_check_threshold", 500)
 ```
 
 ## Adding a Check to an Existing Dimension
@@ -300,10 +302,11 @@ Each check should justify its severity with a real failure mode it catches. Avoi
 
 ### How severity affects scoring
 
-Each dimension gets a numeric score (0-100). Deductions are severity-weighted and normalized:
+Each dimension gets a numeric score (0-100):
 
-- **Tool-normalized** dimensions (discoverability, efficiency, accuracy, security): deductions divided by tool count
-- **Call-normalized** dimensions (reliability, composability, performance): deductions divided by call count
-- **Raw** dimensions (conformance, compliance): deductions applied directly
+```
+raw = sum(severity_weight for each finding)
+score = max(0, 100 - sqrt(min(raw, 100)) * curve_factor)
+```
 
-Hard-cap overrides ensure critical findings dominate: 1 critical caps the dimension at grade D, 2+ criticals force grade F regardless of score.
+The default curve factor is 5, and deductions are not divided by tool or call count. Hard caps ensure severe findings dominate: 1 critical caps at D, 2+ criticals force F, 3+ highs cap at C, and 5+ highs cap at D.

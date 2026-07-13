@@ -1,5 +1,7 @@
 # Scoring System Rewrite — Changelog
 
+> Historical note: this document describes an intermediate denominator-normalized scoring model. The current model uses a square-root curve with no tool/call denominator; see the README and `scoring/grader.py` for the live contract.
+
 Date: 2026-04-29
 Branch: `rogue-socket/mcp-audit-plan`
 

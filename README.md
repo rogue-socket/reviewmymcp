@@ -69,11 +69,11 @@ reviewmymcp audit "python -m my_server" --judge-provider gemini
 |------|-------------|
 | `--log-file PATH` | Use captured logs instead of live traffic |
 | `--transport stdio\|http` | Force transport type (auto-detected) |
-| `--output terminal\|json\|html\|sarif` | Output format (default: terminal) |
-| `--output-file PATH` | Write report to file |
-| `--dimensions LIST` | Comma-separated dimensions to run |
-| `--severity LEVEL` | Minimum severity to report |
-| `--config PATH` | Config file (thresholds, PII patterns) |
+| `--output terminal\|json\|html\|sarif` | Output format (overrides config) |
+| `--output-file PATH` | Write report to file (overrides config) |
+| `--dimensions LIST` | Comma-separated dimensions to run (overrides config) |
+| `--severity LEVEL` | Minimum severity included in the report and score (overrides config) |
+| `--config PATH` | JSON config for redaction, scoring, output, and judge settings |
 | `--no-redact` | Disable PII redaction |
 | `--no-llm-judges` | Skip LLM-judge evaluators |
 | `--judge-provider` | `anthropic` \| `gemini` \| `openai` |
@@ -306,7 +306,7 @@ Each dimension gets a **numeric score (0-100)** and a **letter grade**. There is
 
 ### Scoring formula
 
-Deductions are severity-weighted and normalized per dimension:
+Deductions are severity-weighted, then softened with a square-root curve:
 
 | Severity | Deduction weight |
 |----------|-----------------|
@@ -316,7 +316,12 @@ Deductions are severity-weighted and normalized per dimension:
 | Low | 1 point |
 | Info | 0 |
 
-Deductions are normalized by a per-dimension denominator — tool count (discoverability, efficiency, accuracy, security), call count (reliability, composability, performance), or raw (conformance, compliance). This means 1 problem across 50 tools has less impact than 1 problem across 3 tools.
+```
+raw = sum(severity_weight for each finding)
+score = max(0, 100 - sqrt(min(raw, 100)) * curve_factor)
+```
+
+The default curve factor is 5. Findings are not divided by tool count or call count.
 
 ### Grade thresholds
 
@@ -332,6 +337,8 @@ Deductions are normalized by a per-dimension denominator — tool count (discove
 
 - **1 critical finding** → dimension capped at **D** regardless of score
 - **2+ critical findings** → dimension forced to **F**
+- **3+ high findings** → dimension capped at **C**
+- **5+ high findings** → dimension capped at **D**
 
 ## Log Format
 
@@ -399,8 +406,7 @@ Create a JSON config file and pass it with `--config`:
 {
   "judge": {
     "provider": "anthropic",
-    "model": "claude-haiku-4-5-20251001",
-    "dual_call": true
+    "model": "claude-haiku-4-5-20251001"
   },
   "redaction": {
     "enabled": true,
@@ -414,7 +420,7 @@ Create a JSON config file and pass it with `--config`:
       "low": 1.0,
       "info": 0.0
     },
-    "normalization_multiplier": 4.0
+    "curve_factor": 5.0
   },
   "thresholds": {
     "description_bloat_single": 500,
@@ -423,9 +429,17 @@ Create a JSON config file and pass it with `--config`:
     "latency_cliff_p99_ms": 30000,
     "latency_cliff_ratio": 10,
     "token_cost_bytes_per_call": 40000
-  }
+  },
+  "auth": {"scopes_used": ["event:read"]},
+  "persistence": {"paths": {"MEMORY_FILE_PATH": "/srv/memory.jsonl"}},
+  "dimensions": ["security", "reliability"],
+  "min_severity": "medium",
+  "output_format": "json",
+  "output_file": "report.json"
 }
 ```
+
+Explicit CLI options override the config file. `min_severity` filters findings before scoring and exit-code evaluation; a filtered-out HIGH or CRITICAL finding does not cause a non-zero exit.
 
 ## Adding Evaluators
 
