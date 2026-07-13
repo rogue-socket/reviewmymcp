@@ -37,9 +37,16 @@ def _register_all():
     from reviewmymcp.evaluators.security.checks import SecurityEvaluator
 
     for cls in [
-        EfficiencyEvaluator, AccuracyEvaluator, DiscoverabilityEvaluator,
-        ComposabilityEvaluator, ReliabilityEvaluator, SecurityEvaluator,
-        ComplianceEvaluator, ConformanceEvaluator, PerformanceEvaluator, ProvenanceEvaluator,
+        EfficiencyEvaluator,
+        AccuracyEvaluator,
+        DiscoverabilityEvaluator,
+        ComposabilityEvaluator,
+        ReliabilityEvaluator,
+        SecurityEvaluator,
+        ComplianceEvaluator,
+        ConformanceEvaluator,
+        PerformanceEvaluator,
+        ProvenanceEvaluator,
     ]:
         try:
             register(cls())
@@ -59,9 +66,12 @@ def _full_pipeline(log_path: Path) -> AuditReport:
     tool_count = len(server_meta.tools)
     call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
     return grade_results(
-        results, server_meta,
-        total_events=len(events), total_sessions=len(sessions),
-        tool_count=tool_count, call_count=call_count,
+        results,
+        server_meta,
+        total_events=len(events),
+        total_sessions=len(sessions),
+        tool_count=tool_count,
+        call_count=call_count,
     )
 
 
@@ -81,8 +91,15 @@ class TestEverythingServer:
         report = _full_pipeline(EVERYTHING_LOG)
         dims = {ds.dimension for ds in report.dimension_scores}
         expected = {
-            "efficiency", "accuracy", "discoverability", "composability",
-            "reliability", "security", "compliance", "conformance", "performance",
+            "efficiency",
+            "accuracy",
+            "discoverability",
+            "composability",
+            "reliability",
+            "security",
+            "compliance",
+            "conformance",
+            "performance",
             "provenance",
         }
         assert dims == expected

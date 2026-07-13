@@ -152,10 +152,12 @@ class ConformanceEvaluator:
                         )
                     )
         if small_sessions:
-            skipped.append(SkippedCheck(
-                check_id="conformance.initialize-handshake",
-                reason=f"skipped {small_sessions} session(s) with <= 2 events",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="conformance.initialize-handshake",
+                    reason=f"skipped {small_sessions} session(s) with <= 2 events",
+                )
+            )
         return findings
 
     def _check_capability_mismatch(self, events: list[McpEvent], server_meta: ServerMeta) -> list[Finding]:
@@ -477,11 +479,7 @@ def _tool_response_text(result: dict[str, Any]) -> str:
     content = result.get("content", [])
     if not isinstance(content, list):
         return ""
-    return "\n".join(
-        item["text"]
-        for item in content
-        if isinstance(item, dict) and isinstance(item.get("text"), str)
-    )
+    return "\n".join(item["text"] for item in content if isinstance(item, dict) and isinstance(item.get("text"), str))
 
 
 def _looks_like_error_content(text: str) -> bool:

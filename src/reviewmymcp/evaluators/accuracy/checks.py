@@ -150,7 +150,9 @@ class AccuracyEvaluator:
                 )
         return findings
 
-    def _check_output_drift(self, events: list[McpEvent], req_map: dict[str, McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
+    def _check_output_drift(
+        self, events: list[McpEvent], req_map: dict[str, McpEvent], skipped: list[SkippedCheck]
+    ) -> list[Finding]:
         findings: list[Finding] = []
         tool_outputs: dict[str, list[list[str]]] = defaultdict(list)
 
@@ -199,10 +201,12 @@ class AccuracyEvaluator:
                     )
                 )
         if skipped_tools:
-            skipped.append(SkippedCheck(
-                check_id="accuracy.output-schema-drift",
-                reason=f"fewer than 3 responses for {skipped_tools} tool(s)",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="accuracy.output-schema-drift",
+                    reason=f"fewer than 3 responses for {skipped_tools} tool(s)",
+                )
+            )
         return findings
 
     def _check_error_channel_correctness(
@@ -298,10 +302,12 @@ class AccuracyEvaluator:
         skipped: list[SkippedCheck],
     ) -> list[Finding]:
         if config.judge is None:
-            skipped.append(SkippedCheck(
-                check_id="accuracy.description-accuracy",
-                reason="LLM judge not enabled",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="accuracy.description-accuracy",
+                    reason="LLM judge not enabled",
+                )
+            )
             return []
 
         from reviewmymcp.judge.base import JudgeRequest
@@ -309,14 +315,16 @@ class AccuracyEvaluator:
 
         findings: list[Finding] = []
         for tool in server_meta.tools:
-            tool_calls = [(eid, req) for eid, req in req_map.items()
-                          if req.params and req.params.get("name") == tool.name and not req.is_probe]
+            tool_calls = [
+                (eid, req)
+                for eid, req in req_map.items()
+                if req.params and req.params.get("name") == tool.name and not req.is_probe
+            ]
             if not tool_calls:
                 continue
 
             total = len(tool_calls)
-            successes = sum(1 for eid, _ in tool_calls
-                            if eid in resp_map and _is_success(resp_map[eid]))
+            successes = sum(1 for eid, _ in tool_calls if eid in resp_map and _is_success(resp_map[eid]))
             errors = total - successes
 
             success_outputs: list[str] = []
@@ -348,32 +356,38 @@ class AccuracyEvaluator:
                 avg_latency_ms=f"{avg_latency:.0f}",
             )
 
-            response = config.judge.complete(JudgeRequest(
-                system=DESCRIPTION_ACCURACY_SYSTEM,
-                user=user_prompt,
-            ))
+            response = config.judge.complete(
+                JudgeRequest(
+                    system=DESCRIPTION_ACCURACY_SYSTEM,
+                    user=user_prompt,
+                )
+            )
 
             if response.parsed is None:
-                skipped.append(SkippedCheck(
-                    check_id="accuracy.description-accuracy",
-                    reason=f"judge call failed for tool '{tool.name}'",
-                ))
+                skipped.append(
+                    SkippedCheck(
+                        check_id="accuracy.description-accuracy",
+                        reason=f"judge call failed for tool '{tool.name}'",
+                    )
+                )
                 continue
 
             score = response.parsed.get("score", 5)
             if score <= 2:
-                findings.append(Finding(
-                    check_id="accuracy.description-accuracy",
-                    severity=Severity.MEDIUM,
-                    title=f"Tool `{tool.name}` description inaccurate (score {score}/5)",
-                    description=response.parsed.get("rationale", ""),
-                    evidence={
-                        "score": score,
-                        "discrepancies": response.parsed.get("discrepancies", []),
-                    },
-                    remediation="Update the tool description to match its observed behavior.",
-                    affected_entity=tool.name,
-                ))
+                findings.append(
+                    Finding(
+                        check_id="accuracy.description-accuracy",
+                        severity=Severity.MEDIUM,
+                        title=f"Tool `{tool.name}` description inaccurate (score {score}/5)",
+                        description=response.parsed.get("rationale", ""),
+                        evidence={
+                            "score": score,
+                            "discrepancies": response.parsed.get("discrepancies", []),
+                        },
+                        remediation="Update the tool description to match its observed behavior.",
+                        affected_entity=tool.name,
+                    )
+                )
         return findings
 
     def _check_error_message_quality(self, events: list[McpEvent], req_map: dict[str, McpEvent]) -> list[Finding]:

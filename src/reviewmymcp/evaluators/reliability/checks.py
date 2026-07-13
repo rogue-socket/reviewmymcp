@@ -75,15 +75,8 @@ class ReliabilityEvaluator:
         skipped: list[SkippedCheck],
     ) -> list[Finding]:
         findings: list[Finding] = []
-        requests = {
-            e.event_id: e
-            for e in events
-            if e.is_request and e.method == "tools/call" and not e.is_probe
-        }
-        responses = [
-            e for e in events
-            if e.is_response and e.request_event_id in requests and not e.is_probe
-        ]
+        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
+        responses = [e for e in events if e.is_response and e.request_event_id in requests and not e.is_probe]
 
         tool_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"total": 0, "errors": 0})
         for resp in responses:
@@ -140,10 +133,12 @@ class ReliabilityEvaluator:
                     )
                 )
         if skipped_tools:
-            skipped.append(SkippedCheck(
-                check_id="reliability.error-rate",
-                reason=f"fewer than 3 calls for {skipped_tools} tool(s)",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="reliability.error-rate",
+                    reason=f"fewer than 3 calls for {skipped_tools} tool(s)",
+                )
+            )
         return findings
 
     def _check_silent_failure_suspect(self, events: list[McpEvent]) -> list[Finding]:
@@ -347,10 +342,7 @@ class ReliabilityEvaluator:
         requests = {
             e.event_id: e
             for e in events
-            if e.is_request
-            and e.method == "tools/call"
-            and e.is_probe
-            and e.probe_type in CONCURRENT_WRITE_PROBE_TYPES
+            if e.is_request and e.method == "tools/call" and e.is_probe and e.probe_type in CONCURRENT_WRITE_PROBE_TYPES
         }
         samples = []
         for resp in events:
@@ -619,11 +611,7 @@ def _is_success_shaped_empty(response: McpEvent) -> bool:
         return True
     if not isinstance(content, list):
         return False
-    text_items = [
-        item.get("text", "")
-        for item in content
-        if isinstance(item, dict) and item.get("type") == "text"
-    ]
+    text_items = [item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text"]
     if not text_items:
         return False
     return all(_is_default_empty_text(str(text)) for text in text_items)
@@ -645,7 +633,9 @@ def _is_default_empty_value(value) -> bool:
         return True
     if isinstance(value, dict):
         result_keys = {"results", "items", "data", "records", "entries"}
-        return bool(value) and all(key in result_keys and _is_default_empty_value(nested) for key, nested in value.items())
+        return bool(value) and all(
+            key in result_keys and _is_default_empty_value(nested) for key, nested in value.items()
+        )
     return False
 
 

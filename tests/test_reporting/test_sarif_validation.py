@@ -60,8 +60,14 @@ def test_sarif_validates_empty_report():
 
 def test_sarif_validates_all_severity_levels():
     findings = [
-        Finding(check_id=f"test.{sev.value}", severity=sev, title=f"{sev.value} finding",
-                description="desc", affected_entity="tool", remediation="fix")
+        Finding(
+            check_id=f"test.{sev.value}",
+            severity=sev,
+            title=f"{sev.value} finding",
+            description="desc",
+            affected_entity="tool",
+            remediation="fix",
+        )
         for sev in Severity
     ]
     report = _make_report_with_findings(findings)

@@ -68,22 +68,33 @@ def _count_by_severity(findings: list[Finding]) -> dict[Severity, int]:
     return counts
 
 
-def _raw_deduction(findings: list[Finding]) -> float:
+def _resolved_severity_weights(configured_weights: dict[str, float] | None) -> dict[Severity, float]:
+    weights = dict(SEVERITY_WEIGHT)
+    if configured_weights:
+        weights.update({Severity(name): value for name, value in configured_weights.items()})
+    return weights
+
+
+def _raw_deduction(findings: list[Finding], severity_weights: dict[Severity, float] = SEVERITY_WEIGHT) -> float:
     """Sum severity-weighted deductions for a set of findings."""
-    return sum(SEVERITY_WEIGHT[f.severity] for f in findings)
+    return sum(severity_weights[f.severity] for f in findings)
 
 
-def _score_dimension(findings: list[Finding]) -> float:
+def _score_dimension(
+    findings: list[Finding],
+    severity_weights: dict[Severity, float] = SEVERITY_WEIGHT,
+    score_curve_factor: float = SCORE_CURVE_FACTOR,
+) -> float:
     """Compute a 0-100 numeric score from severity-weighted deductions.
 
     Raw deductions are softened with a square root so high finding counts
     don't crater the score linearly. Raw is capped at 100 before the curve.
     """
-    raw = _raw_deduction(findings)
+    raw = _raw_deduction(findings, severity_weights)
     if raw == 0:
         return 100.0
     capped = min(raw, RAW_DEDUCTION_CAP)
-    score = max(0.0, 100.0 - math.sqrt(capped) * SCORE_CURVE_FACTOR)
+    score = max(0.0, 100.0 - math.sqrt(capped) * score_curve_factor)
     return round(score, 1)
 
 
@@ -142,12 +153,15 @@ def grade_results(
     total_sessions: int = 0,
     tool_count: int = 0,
     call_count: int = 0,
+    severity_weights: dict[str, float] | None = None,
+    score_curve_factor: float = SCORE_CURVE_FACTOR,
 ) -> AuditReport:
     dimension_scores: list[DimensionScore] = []
+    resolved_weights = _resolved_severity_weights(severity_weights)
 
     for result in results:
         counts = _count_by_severity(result.findings)
-        score = _score_dimension(result.findings)
+        score = _score_dimension(result.findings, resolved_weights, score_curve_factor)
         grade = _grade_from_score(score, result.findings)
 
         dimension_scores.append(

@@ -140,6 +140,16 @@ class TestGradeResults:
         report = grade_results(results, make_server_meta())
         assert report.dimension_scores[0].grade == Grade.A
 
+    def test_custom_weights_and_curve_factor_change_score(self):
+        report = grade_results(
+            [_result("efficiency", [_finding("e.x", Severity.HIGH)])],
+            make_server_meta(),
+            severity_weights={"high": 20.0},
+            score_curve_factor=2.0,
+        )
+
+        assert report.dimension_scores[0].score == round(100.0 - math.sqrt(20.0) * 2.0, 1)
+
     def test_single_critical_caps_at_d(self):
         results = [_result("security", [_finding("s.x", Severity.CRITICAL)])]
         report = grade_results(results, make_server_meta())
@@ -165,12 +175,15 @@ class TestGradeResults:
 
     def test_top_findings_sorted_by_severity(self):
         results = [
-            _result("dim1", [
-                _finding("d.low", Severity.LOW),
-                _finding("d.critical", Severity.CRITICAL),
-                _finding("d.medium", Severity.MEDIUM),
-                _finding("d.high", Severity.HIGH),
-            ])
+            _result(
+                "dim1",
+                [
+                    _finding("d.low", Severity.LOW),
+                    _finding("d.critical", Severity.CRITICAL),
+                    _finding("d.medium", Severity.MEDIUM),
+                    _finding("d.high", Severity.HIGH),
+                ],
+            )
         ]
         report = grade_results(results, make_server_meta())
         assert report.top_findings[0].severity == Severity.CRITICAL
@@ -179,7 +192,9 @@ class TestGradeResults:
 
     def test_report_metadata(self):
         results = [_result("efficiency", [])]
-        report = grade_results(results, make_server_meta(), total_events=100, total_sessions=5, tool_count=10, call_count=50)
+        report = grade_results(
+            results, make_server_meta(), total_events=100, total_sessions=5, tool_count=10, call_count=50
+        )
         assert report.total_events == 100
         assert report.total_sessions == 5
         assert report.tool_count == 10

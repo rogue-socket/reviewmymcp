@@ -153,9 +153,7 @@ def test_mutating_tool_missing_behavior_annotations():
     tool = make_tool_def("create_pull_request", description="Create a pull request")
     evaluator = ConformanceEvaluator()
     result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
-    missing_annotations = [
-        f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"
-    ]
+    missing_annotations = [f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"]
 
     assert len(missing_annotations) == 1
     assert missing_annotations[0].affected_entity == "create_pull_request"
@@ -169,9 +167,7 @@ def test_mutating_tool_with_behavior_annotation_ok():
     )
     evaluator = ConformanceEvaluator()
     result = evaluator.evaluate([], make_server_meta([tool]), EvaluatorConfig())
-    missing_annotations = [
-        f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"
-    ]
+    missing_annotations = [f for f in result.findings if f.check_id == "conformance.mutating-annotations-missing"]
 
     assert missing_annotations == []
 

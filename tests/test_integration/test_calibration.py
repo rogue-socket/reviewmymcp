@@ -38,9 +38,12 @@ def _full_pipeline_no_redact(log_path: Path) -> AuditReport:
     tool_count = len(server_meta.tools)
     call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
     return grade_results(
-        results, server_meta,
-        total_events=len(events), total_sessions=len(sessions),
-        tool_count=tool_count, call_count=call_count,
+        results,
+        server_meta,
+        total_events=len(events),
+        total_sessions=len(sessions),
+        tool_count=tool_count,
+        call_count=call_count,
     )
 
 
@@ -98,7 +101,5 @@ class TestSampleBadCalibration:
     def test_exit_code_is_1(self):
         """With critical findings, the report should trigger exit code 1."""
         report = _full_pipeline_no_redact(FIXTURES / "sample_stdio_log.ndjson")
-        has_critical_or_high = any(
-            f.severity.value in ("critical", "high") for f in report.top_findings
-        )
+        has_critical_or_high = any(f.severity.value in ("critical", "high") for f in report.top_findings)
         assert has_critical_or_high

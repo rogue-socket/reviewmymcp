@@ -54,10 +54,12 @@ def test_diff_regression_only_for_high_plus():
 
 def test_diff_dimension_regression():
     baseline = _make_report({"efficiency": [], "security": []})
-    current = _make_report({
-        "efficiency": [],
-        "security": [_finding("s.x", Severity.CRITICAL), _finding("s.y", Severity.CRITICAL)],
-    })
+    current = _make_report(
+        {
+            "efficiency": [],
+            "security": [_finding("s.x", Severity.CRITICAL), _finding("s.y", Severity.CRITICAL)],
+        }
+    )
     diff = diff_reports(baseline, current)
     sec_diff = next(d for d in diff.dimension_diffs if d.dimension == "security")
     assert sec_diff.is_regression is True
@@ -66,7 +68,9 @@ def test_diff_dimension_regression():
 
 
 def test_diff_dimension_improvement():
-    baseline = _make_report({"security": [_finding("s.x", Severity.CRITICAL, "t1"), _finding("s.y", Severity.CRITICAL, "t2")]})
+    baseline = _make_report(
+        {"security": [_finding("s.x", Severity.CRITICAL, "t1"), _finding("s.y", Severity.CRITICAL, "t2")]}
+    )
     current = _make_report({"security": []})
     diff = diff_reports(baseline, current)
     sec_diff = next(d for d in diff.dimension_diffs if d.dimension == "security")

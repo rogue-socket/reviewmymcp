@@ -55,6 +55,7 @@ SAFETY_LANGUAGE = (
 )
 NETWORK_RISK_TERMS = ("url", "uri", "http", "request", "fetch", "download", "crawl", "scrape", "webhook")
 FILE_RISK_TERMS = ("file", "path", "attachment", "read", "write", "delete", "upload", "download")
+DESTRUCTIVE_ACTION_RE = re.compile(r"\b(?:delete|destroy|erase|purge|remove|wipe)\w*\b", re.IGNORECASE)
 SSRF_BLOCK_TERMS = (
     "blocked",
     "disallowed",
@@ -86,6 +87,7 @@ class SecurityEvaluator:
         findings.extend(ssrf_findings)
         ssrf_tools = {finding.affected_entity for finding in ssrf_findings if finding.affected_entity}
         findings.extend(self._check_excessive_permissions(server_meta, ssrf_tools))
+        findings.extend(self._check_destructive_hint_missing(server_meta))
 
         return EvaluatorResult(
             dimension=self.dimension,
@@ -97,13 +99,17 @@ class SecurityEvaluator:
                 "security.ssrf-unblocked",
                 "security.excessive-permissions",
                 "security.network-access-warning",
+                "security.destructive-hint-missing",
             ],
             findings=findings,
             checks_skipped=skipped,
         )
 
     def _check_prompt_injection(
-        self, events: list[McpEvent], config: EvaluatorConfig, skipped: list[SkippedCheck],
+        self,
+        events: list[McpEvent],
+        config: EvaluatorConfig,
+        skipped: list[SkippedCheck],
     ) -> list[Finding]:
         findings: list[Finding] = []
         tool_responses = [e for e in events if e.is_response and e.result and not e.is_error]
@@ -150,8 +156,9 @@ class SecurityEvaluator:
             unflagged = [e for e in tool_responses if e.event_id not in regex_flagged_event_ids]
             for event in unflagged[:50]:
                 content = event.result.get("content", []) if event.result else []
-                text_parts = [item.get("text", "") for item in content
-                              if isinstance(item, dict) and item.get("type") == "text"]
+                text_parts = [
+                    item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text"
+                ]
                 full_text = "\n".join(text_parts)
                 if not full_text.strip():
                     continue
@@ -163,26 +170,30 @@ class SecurityEvaluator:
                             tool_name = e.params.get("name", tool_name)
                             break
 
-                response = config.judge.complete(JudgeRequest(
-                    system=PROMPT_INJECTION_SYSTEM,
-                    user=PROMPT_INJECTION_USER.format(tool_name=tool_name, content=full_text[:2000]),
-                ))
+                response = config.judge.complete(
+                    JudgeRequest(
+                        system=PROMPT_INJECTION_SYSTEM,
+                        user=PROMPT_INJECTION_USER.format(tool_name=tool_name, content=full_text[:2000]),
+                    )
+                )
                 if response.parsed is None:
                     continue
                 risk_score = response.parsed.get("risk_score", 1)
                 if risk_score >= 4:
-                    findings.append(Finding(
-                        check_id="security.prompt-injection-surface",
-                        severity=Severity.CRITICAL if risk_score >= 5 else Severity.HIGH,
-                        title=f"Judge: potential injection in `{tool_name}` output (risk {risk_score}/5)",
-                        description=response.parsed.get("rationale", ""),
-                        evidence={
-                            "risk_score": risk_score,
-                            "suspicious_fragments": response.parsed.get("suspicious_fragments", []),
-                        },
-                        remediation="Sanitize or sandbox tool outputs before returning to model context.",
-                        affected_entity=tool_name,
-                    ))
+                    findings.append(
+                        Finding(
+                            check_id="security.prompt-injection-surface",
+                            severity=Severity.CRITICAL if risk_score >= 5 else Severity.HIGH,
+                            title=f"Judge: potential injection in `{tool_name}` output (risk {risk_score}/5)",
+                            description=response.parsed.get("rationale", ""),
+                            evidence={
+                                "risk_score": risk_score,
+                                "suspicious_fragments": response.parsed.get("suspicious_fragments", []),
+                            },
+                            remediation="Sanitize or sandbox tool outputs before returning to model context.",
+                            affected_entity=tool_name,
+                        )
+                    )
 
         return findings
 
@@ -393,8 +404,12 @@ class SecurityEvaluator:
                 network_terms = [term for term in NETWORK_RISK_TERMS if term in text]
                 file_terms = [term for term in FILE_RISK_TERMS if term in text]
                 execution = tool.execution or {}
-                user_controlled_url = bool(execution.get("user_controlled_url") or execution.get("dereferences_user_url"))
-                user_controlled_path = bool(execution.get("user_controlled_path") or execution.get("dereferences_user_path"))
+                user_controlled_url = bool(
+                    execution.get("user_controlled_url") or execution.get("dereferences_user_url")
+                )
+                user_controlled_path = bool(
+                    execution.get("user_controlled_path") or execution.get("dereferences_user_path")
+                )
 
                 if tool.name in suppress_network_tools and (user_controlled_url or len(network_terms) >= 2):
                     continue
@@ -424,6 +439,27 @@ class SecurityEvaluator:
                         affected_entity=tool.name,
                     )
                 )
+        return findings
+
+    def _check_destructive_hint_missing(self, server_meta: ServerMeta) -> list[Finding]:
+        findings: list[Finding] = []
+        for tool in server_meta.tools:
+            if not DESTRUCTIVE_ACTION_RE.search(tool.name) or DESTRUCTIVE_ACTION_RE.search(tool.description):
+                continue
+            findings.append(
+                Finding(
+                    check_id="security.destructive-hint-missing",
+                    severity=Severity.MEDIUM,
+                    title=f"Tool `{tool.name}` does not describe its destructive action",
+                    description=(
+                        "The tool name suggests a destructive action, but its description does not name that action or "
+                        "its consequences."
+                    ),
+                    evidence={"tool": tool.name, "description": tool.description},
+                    remediation="Describe the destructive action and its consequences in the tool description.",
+                    affected_entity=tool.name,
+                )
+            )
         return findings
 
 

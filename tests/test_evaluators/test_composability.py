@@ -25,7 +25,12 @@ def test_error_recovery_not_triggered_for_good_errors():
     for i in range(4):
         req, resp = make_tool_call_pair("tool", {"x": i}, request_id=i + 1)
         resp.is_error = False
-        resp.result = {"content": [{"type": "text", "text": "Invalid argument: missing 'name'. Try again with the required field."}], "isError": True}
+        resp.result = {
+            "content": [
+                {"type": "text", "text": "Invalid argument: missing 'name'. Try again with the required field."}
+            ],
+            "isError": True,
+        }
         events.extend([req, resp])
 
     evaluator = ComposabilityEvaluator()
@@ -59,7 +64,12 @@ def test_programmatic_readiness_prose():
         req, resp = make_tool_call_pair(
             "report_tool",
             {"id": i},
-            result_content=[{"type": "text", "text": "This is a long prose response that describes the results in natural language without any structured data format at all. It goes on and on about what was found."}],
+            result_content=[
+                {
+                    "type": "text",
+                    "text": "This is a long prose response that describes the results in natural language without any structured data format at all. It goes on and on about what was found.",
+                }
+            ],
             request_id=i + 1,
         )
         events.extend([req, resp])

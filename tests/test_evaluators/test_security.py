@@ -61,10 +61,7 @@ def test_secret_leakage_aws_key():
 
 
 def test_secret_leakage_no_false_positive_on_url_with_later_at_mention():
-    payload = (
-        '{"url": "https://api.github.com/repos/foo/bar", '
-        '"author": "@octocat", "body": "ping @alice"}'
-    )
+    payload = '{"url": "https://api.github.com/repos/foo/bar", "author": "@octocat", "body": "ping @alice"}'
     req, resp = make_tool_call_pair(
         "search_repositories",
         {},
@@ -187,7 +184,30 @@ def test_excessive_permissions_allows_single_host_saas_urls():
     assert perms == []
 
 
-def test_checks_run_includes_network_access_warning():
+def test_destructive_hint_missing_for_delete_tool_with_generic_description():
+    tool = make_tool_def("delete_file", description="Manage files in the workspace")
+    meta = make_server_meta([tool])
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([], meta, EvaluatorConfig())
+    findings = [f for f in result.findings if f.check_id == "security.destructive-hint-missing"]
+
+    assert len(findings) == 1
+    assert findings[0].severity.value == "medium"
+    assert findings[0].affected_entity == "delete_file"
+
+
+def test_no_destructive_hint_missing_when_description_names_action():
+    tool = make_tool_def("delete_file", description="Delete a file from the workspace after user confirmation")
+    meta = make_server_meta([tool])
+    evaluator = SecurityEvaluator()
+    result = evaluator.evaluate([], meta, EvaluatorConfig())
+    findings = [f for f in result.findings if f.check_id == "security.destructive-hint-missing"]
+
+    assert findings == []
+
+
+def test_checks_run_includes_tool_metadata_checks():
     evaluator = SecurityEvaluator()
     result = evaluator.evaluate([], make_server_meta(), EvaluatorConfig())
     assert "security.network-access-warning" in result.checks_run
+    assert "security.destructive-hint-missing" in result.checks_run

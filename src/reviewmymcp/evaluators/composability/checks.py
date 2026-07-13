@@ -64,7 +64,8 @@ class ComposabilityEvaluator:
         """Check if error responses give enough info for recovery."""
         findings: list[Finding] = []
         error_responses = [
-            e for e in events
+            e
+            for e in events
             if e.is_response and not e.is_probe and (e.is_error or (e.result and e.result.get("isError")))
         ]
         if not error_responses:
@@ -82,10 +83,7 @@ class ComposabilityEvaluator:
                     text = content[0].get("text", "")
 
             text_lower = text.lower().strip()
-            is_ambiguous = (
-                not _has_retryability_hint(text_lower)
-                and not _has_specific_failure_reason(text_lower)
-            )
+            is_ambiguous = not _has_retryability_hint(text_lower) and not _has_specific_failure_reason(text_lower)
             if is_ambiguous:
                 ambiguous += 1
                 if text and text not in ambiguous_examples and len(ambiguous_examples) < 3:
@@ -113,11 +111,7 @@ class ComposabilityEvaluator:
     def _check_idempotency(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check if repeated identical calls produce different results."""
         findings: list[Finding] = []
-        requests = {
-            e.event_id: e
-            for e in events
-            if e.is_request and e.method == "tools/call" and not e.is_probe
-        }
+        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
         responses = [e for e in events if e.is_response and e.request_event_id in requests]
 
         call_results: dict[str, list[dict]] = defaultdict(list)
@@ -160,10 +154,12 @@ class ComposabilityEvaluator:
                     )
                 )
         if skipped_groups:
-            skipped.append(SkippedCheck(
-                check_id="composability.idempotency-violation",
-                reason=f"fewer than 2 repeated call groups with 2+ successes ({skipped_groups} group(s) skipped)",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="composability.idempotency-violation",
+                    reason=f"fewer than 2 repeated call groups with 2+ successes ({skipped_groups} group(s) skipped)",
+                )
+            )
         return findings
 
     def _check_chained_calls(self, events: list[McpEvent]) -> list[Finding]:
@@ -226,11 +222,7 @@ class ComposabilityEvaluator:
     def _check_concurrency(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
         """Check error rate difference between concurrent and sequential calls."""
         findings: list[Finding] = []
-        requests = {
-            e.event_id: e
-            for e in events
-            if e.is_request and e.method == "tools/call" and not e.is_probe
-        }
+        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
         responses = {e.request_event_id: e for e in events if e.is_response and e.request_event_id in requests}
 
         tool_calls: dict[str, list[tuple[McpEvent, McpEvent]]] = defaultdict(list)
@@ -291,20 +283,18 @@ class ComposabilityEvaluator:
             else:
                 skipped_tools += 1
         if skipped_tools:
-            skipped.append(SkippedCheck(
-                check_id="composability.concurrency-safety",
-                reason=f"skipped {skipped_tools} tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="composability.concurrency-safety",
+                    reason=f"skipped {skipped_tools} tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each",
+                )
+            )
         return findings
 
     def _check_programmatic_readiness(self, events: list[McpEvent]) -> list[Finding]:
         """Check if tool outputs are structured for programmatic use."""
         findings: list[Finding] = []
-        requests = {
-            e.event_id: e
-            for e in events
-            if e.is_request and e.method == "tools/call" and not e.is_probe
-        }
+        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
         responses = [e for e in events if e.is_response and e.request_event_id in requests and not e.is_error]
 
         tool_outputs: dict[str, list[str]] = defaultdict(list)

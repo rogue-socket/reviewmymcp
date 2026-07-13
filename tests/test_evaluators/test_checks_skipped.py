@@ -1,6 +1,5 @@
 """Tests that evaluators emit checks_skipped when data is insufficient."""
 
-
 from reviewmymcp.evaluators.accuracy.checks import AccuracyEvaluator
 from reviewmymcp.evaluators.compliance.checks import ComplianceEvaluator
 from reviewmymcp.evaluators.composability.checks import ComposabilityEvaluator
@@ -194,6 +193,7 @@ def test_discoverability_overlap_skipped_single_tool():
 
     class FakeJudge:
         provider_name = "fake"
+
         def complete(self, request):
             return JudgeResponse(raw_text="{}", parsed={"score": 5, "rationale": "ok", "specific_issues": []})
 

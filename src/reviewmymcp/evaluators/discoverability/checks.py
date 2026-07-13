@@ -216,7 +216,11 @@ class DiscoverabilityEvaluator:
                 call_count = sum(
                     1
                     for e in events
-                    if e.is_request and e.method == "tools/call" and e.params and e.params.get("name") == tool_name and not e.is_probe
+                    if e.is_request
+                    and e.method == "tools/call"
+                    and e.params
+                    and e.params.get("name") == tool_name
+                    and not e.is_probe
                 )
                 if call_count >= 10 and len(values) <= 5:
                     findings.append(
@@ -244,10 +248,12 @@ class DiscoverabilityEvaluator:
         skipped: list[SkippedCheck],
     ) -> list[Finding]:
         if config.judge is None:
-            skipped.append(SkippedCheck(
-                check_id="discoverability.description-clarity",
-                reason="LLM judge not enabled",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="discoverability.description-clarity",
+                    reason="LLM judge not enabled",
+                )
+            )
             return []
 
         import json as _json
@@ -262,30 +268,36 @@ class DiscoverabilityEvaluator:
                 description=tool.description,
                 schema=_json.dumps(tool.input_schema, indent=2),
             )
-            response = config.judge.complete(JudgeRequest(
-                system=DESCRIPTION_CLARITY_SYSTEM,
-                user=user_prompt,
-            ))
+            response = config.judge.complete(
+                JudgeRequest(
+                    system=DESCRIPTION_CLARITY_SYSTEM,
+                    user=user_prompt,
+                )
+            )
             if response.parsed is None:
-                skipped.append(SkippedCheck(
-                    check_id="discoverability.description-clarity",
-                    reason=f"judge call failed for tool '{tool.name}'",
-                ))
+                skipped.append(
+                    SkippedCheck(
+                        check_id="discoverability.description-clarity",
+                        reason=f"judge call failed for tool '{tool.name}'",
+                    )
+                )
                 continue
             score = response.parsed.get("score", 5)
             if score <= 2:
-                findings.append(Finding(
-                    check_id="discoverability.description-clarity",
-                    severity=Severity.MEDIUM,
-                    title=f"Tool `{tool.name}` has unclear description (score {score}/5)",
-                    description=response.parsed.get("rationale", ""),
-                    evidence={
-                        "score": score,
-                        "specific_issues": response.parsed.get("specific_issues", []),
-                    },
-                    remediation="Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
-                    affected_entity=tool.name,
-                ))
+                findings.append(
+                    Finding(
+                        check_id="discoverability.description-clarity",
+                        severity=Severity.MEDIUM,
+                        title=f"Tool `{tool.name}` has unclear description (score {score}/5)",
+                        description=response.parsed.get("rationale", ""),
+                        evidence={
+                            "score": score,
+                            "specific_issues": response.parsed.get("specific_issues", []),
+                        },
+                        remediation="Rewrite description to clearly explain what the tool does, when to use it, and key constraints.",
+                        affected_entity=tool.name,
+                    )
+                )
         return findings
 
     def _check_semantic_overlap(
@@ -295,18 +307,22 @@ class DiscoverabilityEvaluator:
         skipped: list[SkippedCheck],
     ) -> list[Finding]:
         if config.judge is None:
-            skipped.append(SkippedCheck(
-                check_id="discoverability.semantic-overlap",
-                reason="LLM judge not enabled",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="discoverability.semantic-overlap",
+                    reason="LLM judge not enabled",
+                )
+            )
             return []
 
         tools = server_meta.tools
         if len(tools) < 2:
-            skipped.append(SkippedCheck(
-                check_id="discoverability.semantic-overlap",
-                reason="fewer than 2 tools to compare",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="discoverability.semantic-overlap",
+                    reason="fewer than 2 tools to compare",
+                )
+            )
             return []
 
         from itertools import combinations
@@ -319,31 +335,37 @@ class DiscoverabilityEvaluator:
 
         for tool_a, tool_b in pairs:
             user_prompt = SEMANTIC_OVERLAP_USER.format(
-                name_a=tool_a.name, description_a=tool_a.description,
-                name_b=tool_b.name, description_b=tool_b.description,
+                name_a=tool_a.name,
+                description_a=tool_a.description,
+                name_b=tool_b.name,
+                description_b=tool_b.description,
             )
-            response = config.judge.complete(JudgeRequest(
-                system=SEMANTIC_OVERLAP_SYSTEM,
-                user=user_prompt,
-            ))
+            response = config.judge.complete(
+                JudgeRequest(
+                    system=SEMANTIC_OVERLAP_SYSTEM,
+                    user=user_prompt,
+                )
+            )
             if response.parsed is None:
                 continue
             score = response.parsed.get("overlap_score", 1)
             if score >= 4:
                 severity = Severity.HIGH if score == 5 else Severity.MEDIUM
-                findings.append(Finding(
-                    check_id="discoverability.semantic-overlap",
-                    severity=severity,
-                    title=f"Tools `{tool_a.name}` and `{tool_b.name}` overlap (score {score}/5)",
-                    description=response.parsed.get("rationale", ""),
-                    evidence={
-                        "overlap_score": score,
-                        "shared_functionality": response.parsed.get("shared_functionality", ""),
-                        "differentiators": response.parsed.get("differentiators", ""),
-                    },
-                    remediation="Merge overlapping tools or add clear differentiation in descriptions.",
-                    affected_entity=f"{tool_a.name}, {tool_b.name}",
-                ))
+                findings.append(
+                    Finding(
+                        check_id="discoverability.semantic-overlap",
+                        severity=severity,
+                        title=f"Tools `{tool_a.name}` and `{tool_b.name}` overlap (score {score}/5)",
+                        description=response.parsed.get("rationale", ""),
+                        evidence={
+                            "overlap_score": score,
+                            "shared_functionality": response.parsed.get("shared_functionality", ""),
+                            "differentiators": response.parsed.get("differentiators", ""),
+                        },
+                        remediation="Merge overlapping tools or add clear differentiation in descriptions.",
+                        affected_entity=f"{tool_a.name}, {tool_b.name}",
+                    )
+                )
         return findings
 
     def _check_rest_wrapper_smell(self, server_meta: ServerMeta) -> list[Finding]:

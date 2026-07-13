@@ -127,11 +127,7 @@ class ProvenanceEvaluator:
 
 
 def _artifact_file_names(server_meta: ServerMeta) -> set[str]:
-    return {
-        PurePosixPath(path).name.lower()
-        for path in server_meta.provenance.artifact_files
-        if path
-    }
+    return {PurePosixPath(path).name.lower() for path in server_meta.provenance.artifact_files if path}
 
 
 def _parse_timestamp(value: str) -> datetime | None:

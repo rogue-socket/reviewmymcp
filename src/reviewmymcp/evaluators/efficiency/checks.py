@@ -185,7 +185,10 @@ class EfficiencyEvaluator:
         return findings
 
     def _check_latency_cliff(
-        self, events: list[McpEvent], request_map: dict[str, McpEvent], config: EvaluatorConfig,
+        self,
+        events: list[McpEvent],
+        request_map: dict[str, McpEvent],
+        config: EvaluatorConfig,
         skipped: list[SkippedCheck],
     ) -> list[Finding]:
         findings: list[Finding] = []
@@ -226,14 +229,19 @@ class EfficiencyEvaluator:
                     )
                 )
         if skipped_tools:
-            skipped.append(SkippedCheck(
-                check_id="efficiency.latency-cliff",
-                reason=f"fewer than 3 latency observations for {skipped_tools} tool(s)",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="efficiency.latency-cliff",
+                    reason=f"fewer than 3 latency observations for {skipped_tools} tool(s)",
+                )
+            )
         return findings
 
     def _check_token_cost(
-        self, events: list[McpEvent], request_map: dict[str, McpEvent], config: EvaluatorConfig,
+        self,
+        events: list[McpEvent],
+        request_map: dict[str, McpEvent],
+        config: EvaluatorConfig,
         skipped: list[SkippedCheck],
     ) -> list[Finding]:
         findings: list[Finding] = []
@@ -277,8 +285,10 @@ class EfficiencyEvaluator:
                     )
                 )
         else:
-            skipped.append(SkippedCheck(
-                check_id="efficiency.token-cost-per-task",
-                reason="no successful tool calls recorded",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="efficiency.token-cost-per-task",
+                    reason="no successful tool calls recorded",
+                )
+            )
         return findings

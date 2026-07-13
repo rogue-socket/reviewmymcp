@@ -168,14 +168,18 @@ class ComplianceEvaluator:
                         )
         return findings
 
-    def _check_data_residency(self, events: list[McpEvent], config: EvaluatorConfig, skipped: list[SkippedCheck]) -> list[Finding]:
+    def _check_data_residency(
+        self, events: list[McpEvent], config: EvaluatorConfig, skipped: list[SkippedCheck]
+    ) -> list[Finding]:
         findings: list[Finding] = []
         expected_regions = config.extra.get("expected_regions", [])
         if not expected_regions:
-            skipped.append(SkippedCheck(
-                check_id="compliance.data-residency-signals",
-                reason="no expected_regions configured",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="compliance.data-residency-signals",
+                    reason="no expected_regions configured",
+                )
+            )
             return findings
 
         region_patterns = [

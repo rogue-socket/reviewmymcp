@@ -76,18 +76,22 @@ class PerformanceEvaluator:
             sessions[event.session_id].append(event)
 
         if len(sessions) < 3:
-            skipped.append(SkippedCheck(
-                check_id="performance.concurrent-session-scaling",
-                reason=f"need >= 3 sessions, only {len(sessions)} found",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="performance.concurrent-session-scaling",
+                    reason=f"need >= 3 sessions, only {len(sessions)} found",
+                )
+            )
             return findings
 
         responses = [e for e in events if e.is_response and e.latency_ms is not None and e.method == "tools/call"]
         if len(responses) < 10:
-            skipped.append(SkippedCheck(
-                check_id="performance.concurrent-session-scaling",
-                reason=f"need >= 10 tool/call responses with latency, only {len(responses)} found",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="performance.concurrent-session-scaling",
+                    reason=f"need >= 10 tool/call responses with latency, only {len(responses)} found",
+                )
+            )
             return findings
 
         responses.sort(key=lambda e: e.timestamp)
@@ -132,10 +136,12 @@ class PerformanceEvaluator:
                     )
                 )
         else:
-            skipped.append(SkippedCheck(
-                check_id="performance.concurrent-session-scaling",
-                reason="insufficient low-concurrency or high-concurrency samples (need >= 3 each)",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="performance.concurrent-session-scaling",
+                    reason="insufficient low-concurrency or high-concurrency samples (need >= 3 each)",
+                )
+            )
         return findings
 
     def _check_throughput_degradation(self, events: list[McpEvent], skipped: list[SkippedCheck]) -> list[Finding]:
@@ -146,10 +152,12 @@ class PerformanceEvaluator:
             key=lambda e: e.timestamp,
         )
         if len(responses) < 20:
-            skipped.append(SkippedCheck(
-                check_id="performance.throughput-degradation",
-                reason=f"need >= 20 tool/call responses, only {len(responses)} found",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="performance.throughput-degradation",
+                    reason=f"need >= 20 tool/call responses, only {len(responses)} found",
+                )
+            )
             return findings
 
         window_size_sec = 10
@@ -174,10 +182,12 @@ class PerformanceEvaluator:
             i = max(i + 1, j)
 
         if len(windows) < 3:
-            skipped.append(SkippedCheck(
-                check_id="performance.throughput-degradation",
-                reason=f"insufficient time windows (need >= 3, got {len(windows)})",
-            ))
+            skipped.append(
+                SkippedCheck(
+                    check_id="performance.throughput-degradation",
+                    reason=f"insufficient time windows (need >= 3, got {len(windows)})",
+                )
+            )
             return findings
 
         windows.sort(key=lambda w: w[0])
@@ -248,11 +258,7 @@ class PerformanceEvaluator:
     def _check_resource_contention(self, events: list[McpEvent]) -> list[Finding]:
         """Check if certain tools slow down when other tools are running."""
         findings: list[Finding] = []
-        requests = {
-            e.event_id: e
-            for e in events
-            if e.is_request and e.method == "tools/call" and not e.is_probe
-        }
+        requests = {e.event_id: e for e in events if e.is_request and e.method == "tools/call" and not e.is_probe}
         responses = [e for e in events if e.is_response and e.request_event_id in requests and e.latency_ms]
 
         tool_latencies_solo: dict[str, list[float]] = defaultdict(list)
