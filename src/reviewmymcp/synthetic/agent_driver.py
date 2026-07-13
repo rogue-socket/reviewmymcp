@@ -30,7 +30,7 @@ class StdioAgentDriver:
         self._process: asyncio.subprocess.Process | None = None
         self._request_id = 0
         self._session_id = str(uuid4())
-        self._pending: dict[int, asyncio.Future] = {}
+        self._pending: dict[int | str, asyncio.Future] = {}
         self._probe_context: str | None = None
         self._probe_rids: dict[int | str, str] = {}
         self._stress_context = False
@@ -56,6 +56,7 @@ class StdioAgentDriver:
                 await asyncio.wait_for(self._process.wait(), timeout=5.0)
             except TimeoutError:
                 self._process.kill()
+                await self._process.wait()
         if hasattr(self, "_reader_task"):
             self._reader_task.cancel()
             try:
@@ -198,12 +199,17 @@ class StdioAgentDriver:
         msg = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
 
         self._record(msg, Direction.CLIENT_TO_SERVER)
+        if not self._process or not self._process.stdin or self._process.returncode is not None:
+            return None
         future: asyncio.Future = asyncio.get_event_loop().create_future()
         self._pending[rid] = future
 
-        if self._process and self._process.stdin:
+        try:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
+        except (BrokenPipeError, ConnectionError):
+            self._pending.pop(rid, None)
+            return None
 
         try:
             result = await asyncio.wait_for(future, timeout=30.0)
@@ -230,13 +236,18 @@ class StdioAgentDriver:
 
         rid = msg.get("id")
         self._record(msg, Direction.CLIENT_TO_SERVER)
+        if not self._process or not self._process.stdin or self._process.returncode is not None:
+            return None
         if rid is not None:
             future: asyncio.Future = asyncio.get_event_loop().create_future()
             self._pending[rid] = future
 
-        if self._process and self._process.stdin:
+        try:
             self._process.stdin.write((json.dumps(msg) + "\n").encode())
             await self._process.stdin.drain()
+        except (BrokenPipeError, ConnectionError):
+            self._pending.pop(rid, None)
+            return None
 
         if rid is not None:
             try:
@@ -273,6 +284,14 @@ class StdioAgentDriver:
                         future.set_result(msg)
         except asyncio.CancelledError:
             pass
+        finally:
+            self._resolve_pending_requests()
+
+    def _resolve_pending_requests(self) -> None:
+        for future in self._pending.values():
+            if not future.done():
+                future.set_result(None)
+        self._pending.clear()
 
     def _record(self, raw: dict[str, Any], direction: Direction) -> None:
         if self._redact:

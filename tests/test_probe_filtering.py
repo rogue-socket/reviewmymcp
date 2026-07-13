@@ -101,8 +101,11 @@ def test_correlator_propagates_is_probe_to_response() -> None:
 def test_correlator_does_not_override_explicit_probe_response() -> None:
     base = datetime(2026, 5, 16, 0, 0, 0, tzinfo=UTC)
     req, resp = make_tool_call_pair(
-        tool_name="read_file", request_id=1, base_time=base,
-        is_probe=True, probe_type="wrong_type_args",
+        tool_name="read_file",
+        request_id=1,
+        base_time=base,
+        is_probe=True,
+        probe_type="wrong_type_args",
     )
 
     correlate([req, resp])

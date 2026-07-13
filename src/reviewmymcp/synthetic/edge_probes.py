@@ -133,11 +133,7 @@ def _matching_read_tool(tools: list[ToolDefinition]) -> ToolDefinition | None:
             if tool.name == name:
                 return tool
     return next(
-        (
-            tool
-            for tool in tools
-            if tool.name.startswith(("read_", "list_", "get_", "search_", "open_"))
-        ),
+        (tool for tool in tools if tool.name.startswith(("read_", "list_", "get_", "search_", "open_"))),
         None,
     )
 
@@ -252,11 +248,7 @@ def _default_args(tool: ToolDefinition, seed: int) -> dict[str, Any]:
     properties = tool.input_schema.get("properties", {})
     required = tool.input_schema.get("required", [])
     selected = required or list(properties)
-    return {
-        field: _probe_value(properties.get(field, {}), seed, field)
-        for field in selected
-        if field in properties
-    }
+    return {field: _probe_value(properties.get(field, {}), seed, field) for field in selected if field in properties}
 
 
 def _nonexistent_tool() -> list[dict[str, Any]]:
@@ -337,9 +329,7 @@ def _probe_value(schema: dict[str, Any], seed: int, field_name: str) -> Any:
         required = schema.get("required", [])
         selected = required or list(properties)
         return {
-            field: _probe_value(properties.get(field, {}), seed, field)
-            for field in selected
-            if field in properties
+            field: _probe_value(properties.get(field, {}), seed, field) for field in selected if field in properties
         }
     return f"reviewmymcp_probe_{seed}"
 

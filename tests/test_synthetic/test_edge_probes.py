@@ -36,7 +36,9 @@ def test_generates_probes_for_tool():
 
 
 def test_missing_required_args_per_field():
-    tool = _tool("create", required=["name", "email"], properties={"name": {"type": "string"}, "email": {"type": "string"}})
+    tool = _tool(
+        "create", required=["name", "email"], properties={"name": {"type": "string"}, "email": {"type": "string"}}
+    )
     probes = generate_edge_probes([tool])
     missing = [p for p in probes if p["probe_type"] == "missing_required_args"]
     # One probe with all missing + one per required field
@@ -102,10 +104,7 @@ def test_concurrent_write_integrity_probes_for_mutator():
     assert len(burst) == 5
     assert len({p["concurrent_group"] for p in burst}) == 1
     assert len(readback) == 1
-    names = [
-        p["request"]["params"]["arguments"]["entities"][0]["name"]
-        for p in burst
-    ]
+    names = [p["request"]["params"]["arguments"]["entities"][0]["name"] for p in burst]
     assert len(set(names)) == 5
 
 
