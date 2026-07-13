@@ -257,6 +257,12 @@ class StdioAgentDriver:
                         future.set_result(msg)
         except asyncio.CancelledError:
             pass
+        finally:
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_result(None)
+            self._pending.clear()
+            self._send_times.clear()
 
     def _record(
         self,

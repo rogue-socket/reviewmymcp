@@ -9,7 +9,32 @@ from .schema import ToolDefinition
 
 _MAX_TOOLS_FOR_PER_TOOL_PROBES = 3
 
-_WRITE_PREFIXES = ("create_", "push_", "update_", "delete_", "merge_", "fork_", "add_", "write_", "move_", "edit_")
+_WRITE_PREFIXES = (
+    "add_",
+    "clear_",
+    "create_",
+    "delete_",
+    "destroy_",
+    "edit_",
+    "execute_",
+    "fork_",
+    "insert_",
+    "merge_",
+    "move_",
+    "patch_",
+    "post_",
+    "publish_",
+    "purge_",
+    "push_",
+    "remove_",
+    "reset_",
+    "run_",
+    "set_",
+    "truncate_",
+    "update_",
+    "upload_",
+    "write_",
+)
 
 
 def _is_read_only(tool: ToolDefinition) -> bool:
@@ -19,10 +44,10 @@ def _is_read_only(tool: ToolDefinition) -> bool:
 def generate_edge_probes(tools: list[ToolDefinition]) -> list[dict[str, Any]]:
     probes: list[dict[str, Any]] = []
 
-    # Prefer read-only tools for per-tool probes; fall back to any tools if needed.
-    # Cap at _MAX_TOOLS_FOR_PER_TOOL_PROBES so edge noise doesn't swamp scenario traffic.
+    # Only probe read-only tools. Malformed calls against mutators can still cause
+    # side effects on permissive servers. Cap probes so edge noise stays bounded.
     read_tools = [t for t in tools if _is_read_only(t)]
-    sample = (read_tools or tools)[:_MAX_TOOLS_FOR_PER_TOOL_PROBES]
+    sample = read_tools[:_MAX_TOOLS_FOR_PER_TOOL_PROBES]
     for tool in sample:
         probes.extend(_missing_required_args(tool))
         probes.extend(_wrong_type_args(tool))
