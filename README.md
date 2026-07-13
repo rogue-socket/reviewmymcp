@@ -1,1 +1,462 @@
 # reviewmymcp
+
+Audit and evaluation tool for [MCP (Model Context Protocol)](https://modelcontextprotocol.io) servers. Point it at a server or a log file — get back a graded report with specific findings and remediation guidance.
+
+## Why
+
+MCP servers are proliferating faster than quality can keep pace. The protocol is well-specified; the implementations are not. Common failure modes — bloated tool descriptions that eat context windows, schemas the model misuses, tools that overlap, latency cliffs, silent auth failures, prompt injection in tool outputs — are invisible without traffic-level analysis.
+
+`reviewmymcp` provides two complementary audit products:
+
+- **`reviewmymcp audit`** — Log-based audit. Ingests captured MCP JSON-RPC traffic, runs deterministic and LLM-judge checks across 10 dimensions, and produces a graded report with numeric scores (0-100) per dimension.
+- **`reviewmymcp active-audit`** — Active agent-driven usability testing. An LLM agent is placed in front of a live MCP server, given tasks across 6 categories, and its behavioral signals are observed and scored across 5 dimensions.
+
+Both produce independent scored reports. They measure fundamentally different things — protocol quality vs. agent usability.
+
+## Quick Start
+
+```bash
+pip install -e ".[dev]"
+
+# Audit a captured log file
+reviewmymcp replay traffic.ndjson
+
+# Audit a live stdio MCP server (generates synthetic traffic)
+reviewmymcp audit "python -m my_mcp_server"
+
+# Active agent-driven usability testing
+reviewmymcp active-audit "python -m my_mcp_server"
+
+# Capture traffic without evaluating (proxy mode)
+reviewmymcp watch "python -m my_mcp_server"
+
+# Convert logs from other formats to canonical NDJSON
+reviewmymcp convert foreign-logs.json --output-file traffic.ndjson
+
+# Compare two reports for regressions
+reviewmymcp diff baseline.json current.json
+```
+
+## Commands
+
+### `reviewmymcp audit [TARGET]`
+
+Run a full audit. Provide either a server command (stdio) or `--log-file`.
+
+```bash
+# From a log file
+reviewmymcp audit --log-file traffic.ndjson
+
+# Against a live server (generates synthetic traffic + edge probes)
+reviewmymcp audit "python -m my_server"
+
+# JSON output for CI
+reviewmymcp audit --log-file traffic.ndjson --output json --output-file report.json
+
+# SARIF for GitHub code scanning
+reviewmymcp audit --log-file traffic.ndjson --output sarif --output-file results.sarif
+
+# Skip LLM judges (faster, cheaper, deterministic-only)
+reviewmymcp audit --log-file traffic.ndjson --no-llm-judges
+
+# Use Gemini as the judge provider
+reviewmymcp audit "python -m my_server" --judge-provider gemini
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--log-file PATH` | Use captured logs instead of live traffic |
+| `--transport stdio\|http` | Force transport type (auto-detected) |
+| `--output terminal\|json\|html\|sarif` | Output format (overrides config) |
+| `--output-file PATH` | Write report to file (overrides config) |
+| `--dimensions LIST` | Comma-separated dimensions to run (overrides config) |
+| `--severity LEVEL` | Minimum severity included in the report and score (overrides config) |
+| `--config PATH` | JSON config for redaction, scoring, output, and judge settings |
+| `--no-redact` | Disable PII redaction |
+| `--no-llm-judges` | Skip LLM-judge evaluators |
+| `--judge-provider` | `anthropic` \| `gemini` \| `openai` |
+| `--judge-model` | Override judge model name |
+
+### `reviewmymcp replay <LOG_FILE>`
+
+Replay a captured log file through evaluators. Same output options as `audit`.
+
+```bash
+reviewmymcp replay traffic.ndjson --output html --output-file report.html
+```
+
+### `reviewmymcp watch <TARGET>`
+
+Start a transparent proxy and continuously capture traffic to an NDJSON log file.
+
+```bash
+# Stdio proxy
+reviewmymcp watch "python -m my_server" --output-dir ./logs
+
+# HTTP proxy (listens on :8080, forwards to upstream)
+reviewmymcp watch http://localhost:3000/mcp --transport http
+```
+
+### `reviewmymcp diff <BASELINE> <CURRENT>`
+
+Compare two JSON audit reports. Exits with code 1 if any new HIGH or CRITICAL findings (for CI gating).
+
+```bash
+reviewmymcp audit --log-file v1.ndjson --output json --output-file baseline.json
+reviewmymcp audit --log-file v2.ndjson --output json --output-file current.json
+reviewmymcp diff baseline.json current.json
+```
+
+### `reviewmymcp active-audit <TARGET>`
+
+Run agent-driven usability testing against a live MCP server. An LLM agent is given tasks and must use the server's tools to complete them. Behavioral signals (tool found, argument struggle, gave up, chaining failure, etc.) are observed and scored.
+
+```bash
+# Basic active audit
+reviewmymcp active-audit "python -m my_server"
+
+# Use OpenAI as the agent provider
+reviewmymcp active-audit "python -m my_server" --agent-provider openai
+
+# Limit turns and output JSON
+reviewmymcp active-audit "python -m my_server" --max-turns 10 --output json
+
+# Only run specific task categories
+reviewmymcp active-audit "python -m my_server" --categories discovery,single_tool
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--agent-provider` | `anthropic` \| `openai` \| `gemini` (default: anthropic) |
+| `--agent-model` | Override agent model name |
+| `--judge-provider` | Provider for task generation |
+| `--judge-model` | Override judge model name |
+| `--max-turns` | Max agent turns per task (default: 15) |
+| `--output terminal\|json` | Output format |
+| `--output-file PATH` | Write report to file |
+| `--categories LIST` | Comma-separated: discovery, single_tool, multi_step, error_recovery, ambiguous, edge_case |
+
+**Scored dimensions:**
+
+| Dimension | What it measures |
+|-----------|-----------------|
+| Tool Discovery | Can the agent find and correctly identify tools? |
+| Argument Quality | Can the agent construct correct arguments on the first try? |
+| Task Completion | Does the agent complete tasks successfully? |
+| Error Recovery | Can the agent recover from errors? |
+| Multi-step Reasoning | Can the agent chain tools effectively? |
+
+### `reviewmymcp convert <INPUT_FILE>`
+
+Convert MCP logs from various sources to canonical NDJSON format.
+
+```bash
+# Auto-detect and convert (validates existing NDJSON)
+reviewmymcp convert logs.json --output-file traffic.ndjson
+
+# Explicit format
+reviewmymcp convert logs.json --format passthrough
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--format` | `auto` \| `passthrough` \| `claude-desktop` \| `python-sdk` |
+| `--output-file PATH` | Write output to file (default: stdout) |
+
+### `reviewmymcp list-checks`
+
+Print all available evaluator checks with their dimensions.
+
+## Exit Codes
+
+| Code | Meaning | Commands |
+|------|---------|----------|
+| 0 | Audit passed (no critical/high findings) | `audit`, `replay`, `diff` |
+| 1 | Critical or high findings found / regressions detected | `audit`, `replay`, `diff` |
+| 2 | Could not run (bad config, missing target, connection failure) | all |
+
+For `audit` and `replay`, exit code `1` is a findings status, not an output failure.
+Machine-readable output such as `--output json --output-file report.json` is still written
+when high or critical findings are present. CI jobs that need to archive or parse the report
+should collect the output file before failing the build on exit code `1`.
+
+## Evaluation Dimensions
+
+The tool evaluates MCP servers across 10 dimensions with 50+ total checks:
+
+### Efficiency (5 checks)
+Measures token cost and waste.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `description-bloat` | HIGH | Tool descriptions >500 tokens, or total >5000 tokens |
+| `response-payload-bloat` | HIGH | Tool responses >4000 tokens at p95 |
+| `redundant-calls` | MEDIUM | Same tool called with identical arguments in a session |
+| `latency-cliff` | HIGH | p99 >30s or p99/p50 ratio >10x |
+| `token-cost-per-task` | MEDIUM | >10k tokens per successful tool call |
+
+### Accuracy (5 checks)
+Measures whether tools behave as described.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `schema-misuse` | HIGH | Schema-invalid args accepted, or valid args rejected |
+| `output-schema-drift` | MEDIUM | Inconsistent response structures across calls |
+| `argument-validation-gap` | HIGH | Missing required fields accepted silently |
+| `error-message-quality` | MEDIUM | Generic/uninformative error messages |
+| `description-accuracy` | MEDIUM | Description promises vs actual behavior (LLM judge) |
+
+### Discoverability (6 checks)
+Measures how well models can find and understand tools.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `name-quality` | LOW | Short, ambiguous, or verb-less tool names |
+| `missing-examples` | MEDIUM | Complex schemas with no usage examples |
+| `enum-undocumented` | MEDIUM | Enum values not documented, or implicit enums |
+| `rest-wrapper-smell` | MEDIUM | CRUD patterns suggesting raw REST API wrapper |
+| `description-clarity` | MEDIUM | Vague or jargon-heavy descriptions (LLM judge) |
+| `semantic-overlap` | HIGH | Tools with >80% functional overlap (LLM judge) |
+
+### Composability (5 checks)
+Measures behavior under chained and programmatic use.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `error-recovery-surface` | HIGH | >50% of errors give no recovery path |
+| `idempotency-violation` | HIGH | Different results for identical repeated calls |
+| `chained-call-failure` | MEDIUM | Output of tool A unusable as input to tool B |
+| `concurrency-safety` | MEDIUM | Higher error rate under concurrent calls |
+| `programmatic-readiness` | MEDIUM | Prose output instead of structured data |
+
+### Reliability (5 checks)
+Measures whether tools work consistently.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `error-rate` | HIGH | >10% failure rate per tool |
+| `timeout-behavior` | CRITICAL | Requests that never receive a response |
+| `task-lifecycle` | HIGH | Invalid task state transitions |
+| `progress-reporting` | MEDIUM | Long operations (>5s) with no progress notifications |
+| `retry-semantics` | MEDIUM | Non-deterministic errors on retry |
+
+### Security (5 checks)
+Measures attack surface and data safety.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `prompt-injection-surface` | CRITICAL | Injection patterns in tool outputs |
+| `secret-leakage` | CRITICAL | API keys, tokens, passwords in responses |
+| `auth-flow-correctness` | HIGH | Missing PKCE, tokens in URLs |
+| `scope-creep` | HIGH | Using capabilities not declared during init |
+| `excessive-permissions` | MEDIUM | Dangerous operations without safeguards |
+
+### Compliance (4 checks)
+Measures governance and audit readiness.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `pii-in-responses` | HIGH | Emails, SSNs, phone numbers, credit cards |
+| `audit-trail-completeness` | MEDIUM | Orphan requests, missing init handshake |
+| `consent-flow-gaps` | HIGH | Sampling/elicitation without declared capability |
+| `data-residency-signals` | MEDIUM | Unexpected geographic regions in responses |
+
+### Provenance (5 checks)
+Measures source and package artifact trust signals.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `source-reachable` | MEDIUM | Declared repository URL is unreachable |
+| `readme-in-artifact` | INFO | Published artifact lacks a README |
+| `license-in-artifact` | MEDIUM | Declared license text is missing from artifact |
+| `maintenance-recency` | INFO/LOW | Source commit or release is stale |
+| `version-churn` | INFO | Multiple versions published within one hour |
+
+### Conformance (6 checks)
+Measures MCP protocol spec adherence.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `initialize-handshake` | CRITICAL | Missing or out-of-order initialization |
+| `capability-mismatch` | HIGH | Undeclared capabilities in use |
+| `jsonrpc-conformance` | HIGH | Malformed JSON-RPC 2.0 messages |
+| `session-management` | MEDIUM | Missing Mcp-Session-Id after assignment |
+| `error-code-correctness` | LOW | Non-standard JSON-RPC error codes |
+| `notification-correctness` | MEDIUM | Notifications with `id` field |
+
+### Performance Under Load (4 checks)
+Measures behavior as concurrent usage scales.
+
+| Check | Severity | What it detects |
+|-------|----------|----------------|
+| `concurrent-session-scaling` | HIGH | >3x latency increase under concurrent load |
+| `throughput-degradation` | HIGH | Error rate spike at higher request rates |
+| `resource-contention` | MEDIUM | Tools slowing each other under concurrent use |
+| `connection-pool-exhaustion` | HIGH | Connection-related errors under load |
+
+## Grading
+
+Each dimension gets a **numeric score (0-100)** and a **letter grade**. There is no overall server grade — per-dimension scores are the product. CI gating uses exit codes.
+
+### Scoring formula
+
+Deductions are severity-weighted, then softened with a square-root curve:
+
+| Severity | Deduction weight |
+|----------|-----------------|
+| Critical | 25 points |
+| High | 10 points |
+| Medium | 4 points |
+| Low | 1 point |
+| Info | 0 |
+
+```
+raw = sum(severity_weight for each finding)
+score = max(0, 100 - sqrt(min(raw, 100)) * curve_factor)
+```
+
+The default curve factor is 5. Findings are not divided by tool count or call count.
+
+### Grade thresholds
+
+| Grade | Score range |
+|-------|------------|
+| **A** | 90-100 |
+| **B** | 75-89 |
+| **C** | 60-74 |
+| **D** | 40-59 |
+| **F** | 0-39 |
+
+### Hard-cap overrides
+
+- **1 critical finding** → dimension capped at **D** regardless of score
+- **2+ critical findings** → dimension forced to **F**
+- **3+ high findings** → dimension capped at **C**
+- **5+ high findings** → dimension capped at **D**
+
+## Log Format
+
+`reviewmymcp` accepts logs in NDJSON format (one JSON object per line). Each line is either a raw JSON-RPC message or a wrapper with metadata:
+
+```jsonl
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...},"direction":"client_to_server","timestamp":"2025-01-15T10:00:00Z","session_id":"sess-1"}
+{"jsonrpc":"2.0","id":1,"result":{...},"direction":"server_to_client","timestamp":"2025-01-15T10:00:01Z","session_id":"sess-1"}
+```
+
+See [docs/log-format.md](docs/log-format.md) for the full specification.
+
+## LLM Judges
+
+Four checks use an LLM judge for semantic analysis. These are always optional (`--no-llm-judges` to skip).
+
+Supported providers:
+
+| Provider | Flag | Default Model | Env Variable |
+|----------|------|---------------|-------------|
+| Anthropic | `--judge-provider anthropic` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` |
+| Google Gemini | `--judge-provider gemini` | `gemini-2.0-flash` | `GOOGLE_API_KEY` |
+| OpenAI | `--judge-provider openai` | `gpt-4o-mini` | `OPENAI_API_KEY` |
+
+## CI Integration
+
+```yaml
+# GitHub Actions
+- name: Audit MCP Server
+  run: |
+    reviewmymcp audit --log-file traffic.ndjson \
+      --output sarif --output-file results.sarif \
+      --no-llm-judges
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
+
+For regression gating:
+
+```yaml
+- name: Check for regressions
+  run: reviewmymcp diff baseline.json current.json
+  # Exits 1 if any new HIGH+ findings
+```
+
+## Synthetic Traffic
+
+When auditing a live server without `--log-file`, `reviewmymcp` generates synthetic traffic:
+
+1. **Initializes** the server and discovers all tools
+2. **Plans scenarios** using an LLM (or fallback basic scenarios)
+3. **Executes scenarios** — multi-step tool call sequences
+4. **Runs edge probes** — missing args, wrong types, nonexistent tools, malformed JSON-RPC
+5. **Captures** all traffic as `McpEvent` records for evaluation
+
+Use `--no-llm-judges` to skip LLM-based scenario planning (uses deterministic fallback).
+
+## Configuration
+
+Create a JSON config file and pass it with `--config`:
+
+```json
+{
+  "judge": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5-20251001"
+  },
+  "redaction": {
+    "enabled": true,
+    "extra_patterns": ["INTERNAL-\\d{6}"]
+  },
+  "scoring": {
+    "severity_weights": {
+      "critical": 25.0,
+      "high": 10.0,
+      "medium": 4.0,
+      "low": 1.0,
+      "info": 0.0
+    },
+    "curve_factor": 5.0
+  },
+  "thresholds": {
+    "description_bloat_single": 500,
+    "description_bloat_total": 5000,
+    "response_bloat_p95_bytes": 16000,
+    "latency_cliff_p99_ms": 30000,
+    "latency_cliff_ratio": 10,
+    "token_cost_bytes_per_call": 40000
+  },
+  "auth": {"scopes_used": ["event:read"]},
+  "persistence": {"paths": {"MEMORY_FILE_PATH": "/srv/memory.jsonl"}},
+  "dimensions": ["security", "reliability"],
+  "min_severity": "medium",
+  "output_format": "json",
+  "output_file": "report.json"
+}
+```
+
+Explicit CLI options override the config file. `min_severity` filters findings before scoring and exit-code evaluation; a filtered-out HIGH or CRITICAL finding does not cause a non-zero exit.
+
+## Adding Evaluators
+
+See [docs/adding-evaluators.md](docs/adding-evaluators.md) for how to write new checks.
+
+## Project Structure
+
+```
+src/reviewmymcp/
+  cli.py                  # Click CLI entry points
+  config.py               # Configuration loading
+  ingest/                 # Log ingestion, parsing, normalization, conversion, redaction
+  proxy/                  # Stdio and HTTP transparent proxies
+  evaluators/             # 10 dimension subpackages, 50+ checks
+  scoring/                # Grading engine, report diffing
+  reporting/              # Terminal, JSON, HTML, SARIF output
+  synthetic/              # Traffic generation, edge probes
+  active/                 # Prod2: agent-driven usability testing (agent loop, task generation, scoring)
+  judge/                  # Multi-provider LLM abstraction (judge + agent tool-use)
+```

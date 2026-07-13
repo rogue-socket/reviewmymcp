@@ -1,0 +1,1316 @@
+{
+  "server_meta": {
+    "server_name": "secure-filesystem-server",
+    "server_version": "0.2.0",
+    "protocol_version": "2025-11-25",
+    "instructions": "",
+    "server_capabilities": {
+      "logging": false,
+      "prompts": false,
+      "prompts_list_changed": false,
+      "resources": false,
+      "resources_subscribe": false,
+      "resources_list_changed": false,
+      "tools": true,
+      "tools_list_changed": true,
+      "tasks": false,
+      "tasks_list": false,
+      "tasks_cancel": false,
+      "raw": {
+        "tools": {
+          "listChanged": true
+        }
+      }
+    },
+    "client_capabilities": {
+      "roots": true,
+      "sampling": true,
+      "elicitation_form": false,
+      "elicitation_url": false,
+      "tasks": false,
+      "raw": {
+        "roots": {
+          "listChanged": true
+        },
+        "sampling": {}
+      }
+    },
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "tail": {
+              "description": "If provided, returns only the last N lines of the file",
+              "type": "number"
+            },
+            "head": {
+              "description": "If provided, returns only the first N lines of the file",
+              "type": "number"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "read_text_file",
+        "description": "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "tail": {
+              "description": "If provided, returns only the last N lines of the file",
+              "type": "number"
+            },
+            "head": {
+              "description": "If provided, returns only the first N lines of the file",
+              "type": "number"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "read_media_file",
+        "description": "Read an image or audio file. Returns the base64 encoded data and MIME type. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "image",
+                      "audio",
+                      "blob"
+                    ]
+                  },
+                  "data": {
+                    "type": "string"
+                  },
+                  "mimeType": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "mimeType"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "read_multiple_files",
+        "description": "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "paths": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."
+            }
+          },
+          "required": [
+            "paths"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "write_file",
+        "description": "Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "edit_file",
+        "description": "Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "edits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "oldText": {
+                    "type": "string",
+                    "description": "Text to search for - must match exactly"
+                  },
+                  "newText": {
+                    "type": "string",
+                    "description": "Text to replace with"
+                  }
+                },
+                "required": [
+                  "oldText",
+                  "newText"
+                ]
+              }
+            },
+            "dryRun": {
+              "default": false,
+              "description": "Preview changes using git-style diff format",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "edits"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "create_directory",
+        "description": "Create a new directory or ensure a directory exists. Can create multiple nested directories in one operation. If the directory already exists, this operation will succeed silently. Perfect for setting up directory structures for projects or ensuring required paths exist. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": true,
+          "destructiveHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "list_directory",
+        "description": "Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "list_directory_with_sizes",
+        "description": "Get a detailed listing of all files and directories in a specified path, including sizes. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is useful for understanding directory structure and finding specific files within a directory. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sortBy": {
+              "default": "name",
+              "description": "Sort entries by name or size",
+              "type": "string",
+              "enum": [
+                "name",
+                "size"
+              ]
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "directory_tree",
+        "description": "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "excludePatterns": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "move_file",
+        "description": "Move or rename files and directories. Can move files between directories and rename them in a single operation. If the destination exists, the operation will fail. Works across different directories and can be used for simple renaming within the same directory. Both source and destination must be within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "destination": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "destination"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false,
+          "idempotentHint": false,
+          "destructiveHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "search_files",
+        "description": "Recursively search for files and directories matching a pattern. The patterns should be glob-style patterns that match paths relative to the working directory. Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "excludePatterns": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "path",
+            "pattern"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get_file_info",
+        "description": "Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "list_allowed_directories",
+        "description": "Returns the list of directories that this server is allowed to access. Subdirectories within these allowed directories are also accessible. Use this to understand which directories and their nested paths are available before trying to access files.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "output_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      }
+    ],
+    "auth": {
+      "scopes_used": [],
+      "scopes_required": {}
+    },
+    "persistence": {
+      "paths": {},
+      "working_directory": "",
+      "package_directory": ""
+    },
+    "runtime": {
+      "command": [],
+      "package_manager": "",
+      "package_name": "",
+      "package_version": "",
+      "reproducible_command": "",
+      "executable_sha256": ""
+    },
+    "provenance": {
+      "repository_url": "",
+      "source_reachable": null,
+      "artifact_files": [],
+      "license_declared": "",
+      "last_activity_days": null,
+      "version_publish_times": []
+    }
+  },
+  "dimension_scores": [
+    {
+      "dimension": "efficiency",
+      "score": 81.3,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "efficiency.response-payload-bloat",
+          "severity": "high",
+          "title": "Tool `read_file` response p95 is 100236 bytes (~25059 tokens)",
+          "description": "Responses are too large. p95=100236B across 8 calls.",
+          "evidence": {
+            "tool": "read_file",
+            "p95_bytes": 100236,
+            "call_count": 8
+          },
+          "remediation": "Return summaries by default, paginate large results, or use resources instead.",
+          "affected_entity": "read_file"
+        },
+        {
+          "check_id": "efficiency.redundant-calls",
+          "severity": "medium",
+          "title": "Tool `read_file` called 4 times with identical arguments",
+          "description": "In session main-filesystem, same call repeated 4 times.",
+          "evidence": {
+            "tool": "read_file",
+            "count": 4,
+            "session": "main-filesystem"
+          },
+          "remediation": "Consider caching, or use a resource instead of repeated tool calls.",
+          "affected_entity": "read_file"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "efficiency.latency-cliff",
+          "reason": "fewer than 3 latency observations for 5 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "accuracy",
+      "score": 80.0,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 4,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "medium",
+          "title": "Tool `write_file`: 4 schema-valid calls rejected",
+          "description": "Server rejected 4 of 11 calls despite valid arguments.",
+          "evidence": {
+            "tool": "write_file",
+            "invalid_accepted": 0,
+            "valid_rejected": 4,
+            "total": 11
+          },
+          "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+          "affected_entity": "write_file"
+        },
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "medium",
+          "title": "Tool `read_file`: 6 schema-valid calls rejected",
+          "description": "Server rejected 6 of 16 calls despite valid arguments.",
+          "evidence": {
+            "tool": "read_file",
+            "invalid_accepted": 0,
+            "valid_rejected": 6,
+            "total": 16
+          },
+          "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+          "affected_entity": "read_file"
+        },
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "medium",
+          "title": "Tool `read_text_file`: 4 schema-valid calls rejected",
+          "description": "Server rejected 4 of 8 calls despite valid arguments.",
+          "evidence": {
+            "tool": "read_text_file",
+            "invalid_accepted": 0,
+            "valid_rejected": 4,
+            "total": 8
+          },
+          "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+          "affected_entity": "read_text_file"
+        },
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "medium",
+          "title": "Tool `read_media_file`: 4 schema-valid calls rejected",
+          "description": "Server rejected 4 of 8 calls despite valid arguments.",
+          "evidence": {
+            "tool": "read_media_file",
+            "invalid_accepted": 0,
+            "valid_rejected": 4,
+            "total": 8
+          },
+          "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+          "affected_entity": "read_media_file"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "accuracy.output-schema-drift",
+          "reason": "fewer than 3 responses for 5 tool(s)"
+        },
+        {
+          "check_id": "accuracy.description-accuracy",
+          "reason": "LLM judge not enabled"
+        }
+      ]
+    },
+    {
+      "dimension": "discoverability",
+      "score": 92.9,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 2,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `edit_file` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "edit_file",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "edit_file"
+        },
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `directory_tree` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "directory_tree",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "directory_tree"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "discoverability.description-clarity",
+          "reason": "LLM judge not enabled"
+        },
+        {
+          "check_id": "discoverability.semantic-overlap",
+          "reason": "LLM judge not enabled"
+        }
+      ]
+    },
+    {
+      "dimension": "composability",
+      "score": 81.3,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "composability.error-recovery-surface",
+          "severity": "high",
+          "title": "3/3 error responses (100%) are ambiguous",
+          "description": "3 of 3 error responses (100%) do not indicate whether the error is retryable or what went wrong.",
+          "evidence": {
+            "ambiguous_count": 3,
+            "total_errors": 3,
+            "examples": [
+              "Access denied - path outside allowed directories: /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/etc/passwd not in /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/mcp_fs_1hj6ddc2",
+              "Access denied - path outside allowed directories: /etc/passwd not in /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/mcp_fs_1hj6ddc2",
+              "Access denied - path outside allowed directories: /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/outside.txt not in /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/mcp_fs_1hj6ddc2"
+            ]
+          },
+          "remediation": "Include retryability hints and specific failure reasons in error responses.",
+          "affected_entity": ""
+        },
+        {
+          "check_id": "composability.programmatic-readiness",
+          "severity": "medium",
+          "title": "Tool `write_file` returns prose instead of structured data",
+          "description": "7 of 7 responses appear to be unstructured text, making programmatic tool calling difficult.",
+          "evidence": {
+            "tool": "write_file",
+            "prose_count": 7,
+            "total": 7
+          },
+          "remediation": "Return structured JSON data that can be programmatically consumed by agent code.",
+          "affected_entity": "write_file"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "composability.idempotency-violation",
+          "reason": "fewer than 2 repeated call groups with 2+ successes (17 group(s) skipped)"
+        },
+        {
+          "check_id": "composability.concurrency-safety",
+          "reason": "skipped 7 tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each"
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "score": 77.6,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 2,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "reliability.error-rate",
+          "severity": "high",
+          "title": "Tool `write_file` has 12% error rate",
+          "description": "1 of 8 calls failed.",
+          "evidence": {
+            "tool": "write_file",
+            "error_rate": 0.125,
+            "total": 8,
+            "errors": 1
+          },
+          "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+          "affected_entity": "write_file"
+        },
+        {
+          "check_id": "reliability.error-rate",
+          "severity": "high",
+          "title": "Tool `read_file` has 25% error rate",
+          "description": "2 of 8 calls failed.",
+          "evidence": {
+            "tool": "read_file",
+            "error_rate": 0.25,
+            "total": 8,
+            "errors": 2
+          },
+          "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+          "affected_entity": "read_file"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "reliability.error-rate",
+          "reason": "fewer than 3 calls for 5 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "security",
+      "score": 65.4,
+      "grade": "C",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 12,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `read_file` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "read_file",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "read_file"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `read_text_file` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "read_text_file",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "read_text_file"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `read_media_file` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "read_media_file",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "read_media_file"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `read_multiple_files` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "read_multiple_files",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "read_multiple_files"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `write_file` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "write_file",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "write_file"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `create_directory` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "create_directory",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "create_directory"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `list_directory` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "list_directory",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "list_directory"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `list_directory_with_sizes` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "list_directory_with_sizes",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "list_directory_with_sizes"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `directory_tree` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "directory_tree",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "directory_tree"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `search_files` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "search_files",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "search_files"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `get_file_info` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "get_file_info",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "get_file_info"
+        },
+        {
+          "check_id": "security.excessive-permissions",
+          "severity": "medium",
+          "title": "Tool `list_allowed_directories` indicates file system access without safeguards",
+          "description": "Tool description suggests file system access capability with no mention of sandboxing or confirmation.",
+          "evidence": {
+            "tool": "list_allowed_directories",
+            "risk": "file system access"
+          },
+          "remediation": "Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.",
+          "affected_entity": "list_allowed_directories"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "compliance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "compliance.data-residency-signals",
+          "reason": "no expected_regions configured"
+        }
+      ]
+    },
+    {
+      "dimension": "conformance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "performance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "performance.concurrent-session-scaling",
+          "reason": "insufficient low-concurrency or high-concurrency samples (need >= 3 each)"
+        },
+        {
+          "check_id": "performance.throughput-degradation",
+          "reason": "insufficient time windows (need >= 3, got 1)"
+        }
+      ]
+    },
+    {
+      "dimension": "provenance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    }
+  ],
+  "top_findings": [
+    {
+      "check_id": "efficiency.response-payload-bloat",
+      "severity": "high",
+      "title": "Tool `read_file` response p95 is 100236 bytes (~25059 tokens)",
+      "description": "Responses are too large. p95=100236B across 8 calls.",
+      "evidence": {
+        "tool": "read_file",
+        "p95_bytes": 100236,
+        "call_count": 8
+      },
+      "remediation": "Return summaries by default, paginate large results, or use resources instead.",
+      "affected_entity": "read_file"
+    },
+    {
+      "check_id": "composability.error-recovery-surface",
+      "severity": "high",
+      "title": "3/3 error responses (100%) are ambiguous",
+      "description": "3 of 3 error responses (100%) do not indicate whether the error is retryable or what went wrong.",
+      "evidence": {
+        "ambiguous_count": 3,
+        "total_errors": 3,
+        "examples": [
+          "Access denied - path outside allowed directories: /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/etc/passwd not in /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/mcp_fs_1hj6ddc2",
+          "Access denied - path outside allowed directories: /etc/passwd not in /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/mcp_fs_1hj6ddc2",
+          "Access denied - path outside allowed directories: /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/outside.txt not in /private/var/folders/2s/gbrgkhhs0gn7h_vynkzqr6900000gn/T/mcp_fs_1hj6ddc2"
+        ]
+      },
+      "remediation": "Include retryability hints and specific failure reasons in error responses.",
+      "affected_entity": ""
+    },
+    {
+      "check_id": "reliability.error-rate",
+      "severity": "high",
+      "title": "Tool `write_file` has 12% error rate",
+      "description": "1 of 8 calls failed.",
+      "evidence": {
+        "tool": "write_file",
+        "error_rate": 0.125,
+        "total": 8,
+        "errors": 1
+      },
+      "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+      "affected_entity": "write_file"
+    },
+    {
+      "check_id": "reliability.error-rate",
+      "severity": "high",
+      "title": "Tool `read_file` has 25% error rate",
+      "description": "2 of 8 calls failed.",
+      "evidence": {
+        "tool": "read_file",
+        "error_rate": 0.25,
+        "total": 8,
+        "errors": 2
+      },
+      "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+      "affected_entity": "read_file"
+    },
+    {
+      "check_id": "efficiency.redundant-calls",
+      "severity": "medium",
+      "title": "Tool `read_file` called 4 times with identical arguments",
+      "description": "In session main-filesystem, same call repeated 4 times.",
+      "evidence": {
+        "tool": "read_file",
+        "count": 4,
+        "session": "main-filesystem"
+      },
+      "remediation": "Consider caching, or use a resource instead of repeated tool calls.",
+      "affected_entity": "read_file"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "medium",
+      "title": "Tool `write_file`: 4 schema-valid calls rejected",
+      "description": "Server rejected 4 of 11 calls despite valid arguments.",
+      "evidence": {
+        "tool": "write_file",
+        "invalid_accepted": 0,
+        "valid_rejected": 4,
+        "total": 11
+      },
+      "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+      "affected_entity": "write_file"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "medium",
+      "title": "Tool `read_file`: 6 schema-valid calls rejected",
+      "description": "Server rejected 6 of 16 calls despite valid arguments.",
+      "evidence": {
+        "tool": "read_file",
+        "invalid_accepted": 0,
+        "valid_rejected": 6,
+        "total": 16
+      },
+      "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+      "affected_entity": "read_file"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "medium",
+      "title": "Tool `read_text_file`: 4 schema-valid calls rejected",
+      "description": "Server rejected 4 of 8 calls despite valid arguments.",
+      "evidence": {
+        "tool": "read_text_file",
+        "invalid_accepted": 0,
+        "valid_rejected": 4,
+        "total": 8
+      },
+      "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+      "affected_entity": "read_text_file"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "medium",
+      "title": "Tool `read_media_file`: 4 schema-valid calls rejected",
+      "description": "Server rejected 4 of 8 calls despite valid arguments.",
+      "evidence": {
+        "tool": "read_media_file",
+        "invalid_accepted": 0,
+        "valid_rejected": 4,
+        "total": 8
+      },
+      "remediation": "Schema may be overly permissive — add constraints that reflect actual validation.",
+      "affected_entity": "read_media_file"
+    },
+    {
+      "check_id": "composability.programmatic-readiness",
+      "severity": "medium",
+      "title": "Tool `write_file` returns prose instead of structured data",
+      "description": "7 of 7 responses appear to be unstructured text, making programmatic tool calling difficult.",
+      "evidence": {
+        "tool": "write_file",
+        "prose_count": 7,
+        "total": 7
+      },
+      "remediation": "Return structured JSON data that can be programmatically consumed by agent code.",
+      "affected_entity": "write_file"
+    }
+  ],
+  "total_events": 135,
+  "total_sessions": 4,
+  "tool_count": 14,
+  "call_count": 53,
+  "timestamp": "2026-05-31T21:11:05.835678Z"
+}

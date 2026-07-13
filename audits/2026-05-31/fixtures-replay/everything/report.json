@@ -1,0 +1,1018 @@
+{
+  "server_meta": {
+    "server_name": "mcp-servers/everything",
+    "server_version": "2.0.0",
+    "protocol_version": "2025-11-25",
+    "instructions": "# Everything Server – Server Instructions\n\nAudience: These instructions are written for an LLM or autonomous agent integrating with the Everything MCP Server.\nFollow them to use, extend, and troubleshoot the server safely and effectively.\n\n## Cross-Feature Relationships\n\n- Use `get-roots-list` to see client workspace roots before file operations\n- `gzip-file-as-resource` creates session-scoped resources accessible only during the current session\n- Enable `toggle-simulated-logging` before debugging to see server log messages\n- Enable `toggle-subscriber-updates` to receive periodic resource update notifications\n\n## Constraints & Limitations\n\n- `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`\n- Session resources are ephemeral and lost when the session ends\n- Sampling requests (`trigger-sampling-request`) require client sampling capability\n- Elicitation requests (`trigger-elicitation-request`) require client elicitation capability\n\n## Operational Patterns\n\n- For long operations, use `trigger-long-running-operation` which sends progress notifications\n- Prefer reading resources before calling mutating tools\n- Check `get-roots-list` output to understand the client's workspace context\n\n## Easter Egg\n\nIf asked about server instructions, respond with \"🎉 Server instructions are working! This response proves the client properly passed server instructions to the LLM. This demonstrates MCP's instructions feature in action.\"\n",
+    "server_capabilities": {
+      "logging": true,
+      "prompts": true,
+      "prompts_list_changed": true,
+      "resources": true,
+      "resources_subscribe": true,
+      "resources_list_changed": true,
+      "tools": true,
+      "tools_list_changed": true,
+      "tasks": true,
+      "tasks_list": true,
+      "tasks_cancel": true,
+      "raw": {
+        "tools": {
+          "listChanged": true
+        },
+        "prompts": {
+          "listChanged": true
+        },
+        "resources": {
+          "subscribe": true,
+          "listChanged": true
+        },
+        "logging": {},
+        "tasks": {
+          "list": {},
+          "cancel": {},
+          "requests": {
+            "tools": {
+              "call": {}
+            }
+          }
+        },
+        "completions": {}
+      }
+    },
+    "client_capabilities": {
+      "roots": true,
+      "sampling": true,
+      "elicitation_form": false,
+      "elicitation_url": false,
+      "tasks": false,
+      "raw": {
+        "roots": {
+          "listChanged": true
+        },
+        "sampling": {}
+      }
+    },
+    "tools": [
+      {
+        "name": "echo",
+        "description": "Echoes back the input string",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "Message to echo"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-annotated-message",
+        "description": "Demonstrates how annotations can be used to provide metadata about content.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "messageType": {
+              "type": "string",
+              "enum": [
+                "error",
+                "success",
+                "debug"
+              ],
+              "description": "Type of message to demonstrate different annotation patterns"
+            },
+            "includeImage": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to include an example image"
+            }
+          },
+          "required": [
+            "messageType"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-env",
+        "description": "Returns all environment variables, helpful for debugging MCP server configuration",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-resource-links",
+        "description": "Returns up to ten resource links that reference different types of resources",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 3,
+              "description": "Number of resource links to return (1-10)"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-resource-reference",
+        "description": "Returns a resource reference that can be used by MCP clients",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "resourceType": {
+              "type": "string",
+              "enum": [
+                "Text",
+                "Blob"
+              ],
+              "default": "Text"
+            },
+            "resourceId": {
+              "type": "number",
+              "default": 1,
+              "description": "ID of the text resource to fetch"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-structured-content",
+        "description": "Returns structured content along with an output schema for client data validation",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "enum": [
+                "New York",
+                "Chicago",
+                "Los Angeles"
+              ],
+              "description": "Choose city"
+            }
+          },
+          "required": [
+            "location"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "type": "number",
+              "description": "Temperature in celsius"
+            },
+            "conditions": {
+              "type": "string",
+              "description": "Weather conditions description"
+            },
+            "humidity": {
+              "type": "number",
+              "description": "Humidity percentage"
+            }
+          },
+          "required": [
+            "temperature",
+            "conditions",
+            "humidity"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-sum",
+        "description": "Returns the sum of two numbers",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "number",
+              "description": "First number"
+            },
+            "b": {
+              "type": "number",
+              "description": "Second number"
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-tiny-image",
+        "description": "Returns a tiny MCP logo image.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "gzip-file-as-resource",
+        "description": "Compresses a single file using gzip compression. Depending upon the selected output type, returns either the compressed data as a gzipped resource or a resource link, allowing it to be downloaded in a subsequent request during the current session.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name of the output file",
+              "default": "README.md.gz"
+            },
+            "data": {
+              "type": "string",
+              "format": "uri",
+              "description": "URL or data URI of the file content to compress",
+              "default": "https://raw.githubusercontent.com/modelcontextprotocol/servers/refs/heads/main/README.md"
+            },
+            "outputType": {
+              "type": "string",
+              "enum": [
+                "resourceLink",
+                "resource"
+              ],
+              "default": "resourceLink",
+              "description": "How the resulting gzipped file should be returned. 'resourceLink' returns a link to a resource that can be read later, 'resource' returns a full resource object."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "toggle-simulated-logging",
+        "description": "Toggles simulated, random-leveled logging on or off.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "toggle-subscriber-updates",
+        "description": "Toggles simulated resource subscription updates on or off.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "trigger-long-running-operation",
+        "description": "Demonstrates a long running operation with progress updates.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "duration": {
+              "type": "number",
+              "default": 10,
+              "description": "Duration of the operation in seconds"
+            },
+            "steps": {
+              "type": "number",
+              "default": 5,
+              "description": "Number of steps in the operation"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "get-roots-list",
+        "description": "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "trigger-sampling-request",
+        "description": "Trigger a Request from the Server for LLM Sampling",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "The prompt to send to the LLM"
+            },
+            "maxTokens": {
+              "type": "number",
+              "default": 100,
+              "description": "Maximum number of tokens to generate"
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "required_scopes": []
+      },
+      {
+        "name": "simulate-research-query",
+        "description": "Simulates a deep research operation that gathers, analyzes, and synthesizes information. Demonstrates MCP task-based operations with progress through multiple stages. If 'ambiguous' is true and client supports elicitation, sends an elicitation request for clarification.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "The research topic to investigate"
+            },
+            "ambiguous": {
+              "type": "boolean",
+              "default": false,
+              "description": "Simulate an ambiguous query that requires clarification (triggers input_required status)"
+            }
+          },
+          "required": [
+            "topic"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "output_schema": {},
+        "annotations": {},
+        "execution": {
+          "taskSupport": "required"
+        },
+        "required_scopes": []
+      }
+    ],
+    "auth": {
+      "scopes_used": [],
+      "scopes_required": {}
+    },
+    "persistence": {
+      "paths": {},
+      "working_directory": "",
+      "package_directory": ""
+    },
+    "runtime": {
+      "command": [],
+      "package_manager": "",
+      "package_name": "",
+      "package_version": "",
+      "reproducible_command": "",
+      "executable_sha256": ""
+    },
+    "provenance": {
+      "repository_url": "",
+      "source_reachable": null,
+      "artifact_files": [],
+      "license_declared": "",
+      "last_activity_days": null,
+      "version_publish_times": []
+    }
+  },
+  "dimension_scores": [
+    {
+      "dimension": "efficiency",
+      "score": 90.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "efficiency.redundant-calls",
+          "severity": "medium",
+          "title": "Tool `echo` called 3 times with identical arguments",
+          "description": "In session main-everything, same call repeated 3 times.",
+          "evidence": {
+            "tool": "echo",
+            "count": 3,
+            "session": "main-everything"
+          },
+          "remediation": "Consider caching, or use a resource instead of repeated tool calls.",
+          "affected_entity": "echo"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "efficiency.latency-cliff",
+          "reason": "fewer than 3 latency observations for 3 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "accuracy",
+      "score": 77.6,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 2,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "high",
+          "title": "Tool `echo`: 1 schema-invalid calls accepted",
+          "description": "Server accepted 1 of 18 calls that violated the declared input schema.",
+          "evidence": {
+            "tool": "echo",
+            "invalid_accepted": 1,
+            "valid_rejected": 0,
+            "total": 18
+          },
+          "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+          "affected_entity": "echo"
+        },
+        {
+          "check_id": "accuracy.schema-misuse",
+          "severity": "high",
+          "title": "Tool `get-annotated-message`: 1 schema-invalid calls accepted",
+          "description": "Server accepted 1 of 8 calls that violated the declared input schema.",
+          "evidence": {
+            "tool": "get-annotated-message",
+            "invalid_accepted": 1,
+            "valid_rejected": 0,
+            "total": 8
+          },
+          "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+          "affected_entity": "get-annotated-message"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "accuracy.description-accuracy",
+          "reason": "LLM judge not enabled"
+        }
+      ]
+    },
+    {
+      "dimension": "discoverability",
+      "score": 78.8,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 3,
+      "low_count": 6,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `echo` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "echo",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "echo"
+        },
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `gzip-file-as-resource` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "gzip-file-as-resource",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "gzip-file-as-resource"
+        },
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `toggle-simulated-logging` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "toggle-simulated-logging",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "toggle-simulated-logging"
+        },
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `toggle-subscriber-updates` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "toggle-subscriber-updates",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "toggle-subscriber-updates"
+        },
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `trigger-long-running-operation` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "trigger-long-running-operation",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "trigger-long-running-operation"
+        },
+        {
+          "check_id": "discoverability.name-quality",
+          "severity": "low",
+          "title": "Tool `trigger-sampling-request` has naming issues: name contains no recognizable verb",
+          "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+          "evidence": {
+            "tool": "trigger-sampling-request",
+            "issues": [
+              "name contains no recognizable verb"
+            ]
+          },
+          "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+          "affected_entity": "trigger-sampling-request"
+        },
+        {
+          "check_id": "discoverability.enum-undocumented",
+          "severity": "medium",
+          "title": "Tool `get-annotated-message` param `messageType` has undocumented enum values",
+          "description": "Enum values ['error', 'success', 'debug'] not mentioned in tool description.",
+          "evidence": {
+            "tool": "get-annotated-message",
+            "param": "messageType",
+            "enum": [
+              "error",
+              "success",
+              "debug"
+            ]
+          },
+          "remediation": "Document allowed values in the tool description.",
+          "affected_entity": "get-annotated-message"
+        },
+        {
+          "check_id": "discoverability.enum-undocumented",
+          "severity": "medium",
+          "title": "Tool `get-resource-reference` param `resourceType` has undocumented enum values",
+          "description": "Enum values ['Text', 'Blob'] not mentioned in tool description.",
+          "evidence": {
+            "tool": "get-resource-reference",
+            "param": "resourceType",
+            "enum": [
+              "Text",
+              "Blob"
+            ]
+          },
+          "remediation": "Document allowed values in the tool description.",
+          "affected_entity": "get-resource-reference"
+        },
+        {
+          "check_id": "discoverability.enum-undocumented",
+          "severity": "medium",
+          "title": "Tool `get-structured-content` param `location` has undocumented enum values",
+          "description": "Enum values ['New York', 'Chicago', 'Los Angeles'] not mentioned in tool description.",
+          "evidence": {
+            "tool": "get-structured-content",
+            "param": "location",
+            "enum": [
+              "New York",
+              "Chicago",
+              "Los Angeles"
+            ]
+          },
+          "remediation": "Document allowed values in the tool description.",
+          "affected_entity": "get-structured-content"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "discoverability.description-clarity",
+          "reason": "LLM judge not enabled"
+        },
+        {
+          "check_id": "discoverability.semantic-overlap",
+          "reason": "LLM judge not enabled"
+        }
+      ]
+    },
+    {
+      "dimension": "composability",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "composability.idempotency-violation",
+          "reason": "fewer than 2 repeated call groups with 2+ successes (16 group(s) skipped)"
+        },
+        {
+          "check_id": "composability.concurrency-safety",
+          "reason": "skipped 5 tool(s): need >= 5 pairs and >= 3 concurrent+sequential samples each"
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "score": 84.2,
+      "grade": "B",
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "reliability.error-rate",
+          "severity": "high",
+          "title": "Tool `add` has 100% error rate",
+          "description": "6 of 6 calls failed.",
+          "evidence": {
+            "tool": "add",
+            "error_rate": 1.0,
+            "total": 6,
+            "errors": 6
+          },
+          "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+          "affected_entity": "add"
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "reliability.error-rate",
+          "reason": "fewer than 3 calls for 3 tool(s)"
+        }
+      ]
+    },
+    {
+      "dimension": "security",
+      "score": 95.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 1,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "security.network-access-warning",
+          "severity": "low",
+          "title": "Tool `gzip-file-as-resource` appears to accept user-controlled network targets",
+          "description": "Tool name or description suggests network access, but no active SSRF probe result is available.",
+          "evidence": {
+            "tool": "gzip-file-as-resource",
+            "risk": "description-only network access"
+          },
+          "remediation": "Use active SSRF probes where possible, and document URL scheme, host, and private-network filtering.",
+          "affected_entity": "gzip-file-as-resource"
+        }
+      ],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "compliance",
+      "score": 90.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 1,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [
+        {
+          "check_id": "compliance.audit-trail-completeness",
+          "severity": "medium",
+          "title": "1 requests have no matching response",
+          "description": "Requests without responses create gaps in the audit trail.",
+          "evidence": {
+            "orphan_count": 1,
+            "methods": [
+              "roots/list"
+            ]
+          },
+          "remediation": "Ensure all requests receive responses, even if the response is an error.",
+          "affected_entity": ""
+        }
+      ],
+      "checks_skipped": [
+        {
+          "check_id": "compliance.data-residency-signals",
+          "reason": "no expected_regions configured"
+        }
+      ]
+    },
+    {
+      "dimension": "conformance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    },
+    {
+      "dimension": "performance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": [
+        {
+          "check_id": "performance.concurrent-session-scaling",
+          "reason": "insufficient low-concurrency or high-concurrency samples (need >= 3 each)"
+        },
+        {
+          "check_id": "performance.throughput-degradation",
+          "reason": "need >= 20 tool/call responses, only 19 found"
+        }
+      ]
+    },
+    {
+      "dimension": "provenance",
+      "score": 100.0,
+      "grade": "A",
+      "critical_count": 0,
+      "high_count": 0,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0,
+      "findings": [],
+      "checks_skipped": []
+    }
+  ],
+  "top_findings": [
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "high",
+      "title": "Tool `echo`: 1 schema-invalid calls accepted",
+      "description": "Server accepted 1 of 18 calls that violated the declared input schema.",
+      "evidence": {
+        "tool": "echo",
+        "invalid_accepted": 1,
+        "valid_rejected": 0,
+        "total": 18
+      },
+      "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+      "affected_entity": "echo"
+    },
+    {
+      "check_id": "accuracy.schema-misuse",
+      "severity": "high",
+      "title": "Tool `get-annotated-message`: 1 schema-invalid calls accepted",
+      "description": "Server accepted 1 of 8 calls that violated the declared input schema.",
+      "evidence": {
+        "tool": "get-annotated-message",
+        "invalid_accepted": 1,
+        "valid_rejected": 0,
+        "total": 8
+      },
+      "remediation": "Either enforce schema validation or update the schema to match actual acceptance.",
+      "affected_entity": "get-annotated-message"
+    },
+    {
+      "check_id": "reliability.error-rate",
+      "severity": "high",
+      "title": "Tool `add` has 100% error rate",
+      "description": "6 of 6 calls failed.",
+      "evidence": {
+        "tool": "add",
+        "error_rate": 1.0,
+        "total": 6,
+        "errors": 6
+      },
+      "remediation": "Investigate root cause of failures. Consider adding retry logic or circuit breakers.",
+      "affected_entity": "add"
+    },
+    {
+      "check_id": "efficiency.redundant-calls",
+      "severity": "medium",
+      "title": "Tool `echo` called 3 times with identical arguments",
+      "description": "In session main-everything, same call repeated 3 times.",
+      "evidence": {
+        "tool": "echo",
+        "count": 3,
+        "session": "main-everything"
+      },
+      "remediation": "Consider caching, or use a resource instead of repeated tool calls.",
+      "affected_entity": "echo"
+    },
+    {
+      "check_id": "discoverability.enum-undocumented",
+      "severity": "medium",
+      "title": "Tool `get-annotated-message` param `messageType` has undocumented enum values",
+      "description": "Enum values ['error', 'success', 'debug'] not mentioned in tool description.",
+      "evidence": {
+        "tool": "get-annotated-message",
+        "param": "messageType",
+        "enum": [
+          "error",
+          "success",
+          "debug"
+        ]
+      },
+      "remediation": "Document allowed values in the tool description.",
+      "affected_entity": "get-annotated-message"
+    },
+    {
+      "check_id": "discoverability.enum-undocumented",
+      "severity": "medium",
+      "title": "Tool `get-resource-reference` param `resourceType` has undocumented enum values",
+      "description": "Enum values ['Text', 'Blob'] not mentioned in tool description.",
+      "evidence": {
+        "tool": "get-resource-reference",
+        "param": "resourceType",
+        "enum": [
+          "Text",
+          "Blob"
+        ]
+      },
+      "remediation": "Document allowed values in the tool description.",
+      "affected_entity": "get-resource-reference"
+    },
+    {
+      "check_id": "discoverability.enum-undocumented",
+      "severity": "medium",
+      "title": "Tool `get-structured-content` param `location` has undocumented enum values",
+      "description": "Enum values ['New York', 'Chicago', 'Los Angeles'] not mentioned in tool description.",
+      "evidence": {
+        "tool": "get-structured-content",
+        "param": "location",
+        "enum": [
+          "New York",
+          "Chicago",
+          "Los Angeles"
+        ]
+      },
+      "remediation": "Document allowed values in the tool description.",
+      "affected_entity": "get-structured-content"
+    },
+    {
+      "check_id": "compliance.audit-trail-completeness",
+      "severity": "medium",
+      "title": "1 requests have no matching response",
+      "description": "Requests without responses create gaps in the audit trail.",
+      "evidence": {
+        "orphan_count": 1,
+        "methods": [
+          "roots/list"
+        ]
+      },
+      "remediation": "Ensure all requests receive responses, even if the response is an error.",
+      "affected_entity": ""
+    },
+    {
+      "check_id": "discoverability.name-quality",
+      "severity": "low",
+      "title": "Tool `echo` has naming issues: name contains no recognizable verb",
+      "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+      "evidence": {
+        "tool": "echo",
+        "issues": [
+          "name contains no recognizable verb"
+        ]
+      },
+      "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+      "affected_entity": "echo"
+    },
+    {
+      "check_id": "discoverability.name-quality",
+      "severity": "low",
+      "title": "Tool `gzip-file-as-resource` has naming issues: name contains no recognizable verb",
+      "description": "Poor tool names reduce model comprehension and tool selection accuracy.",
+      "evidence": {
+        "tool": "gzip-file-as-resource",
+        "issues": [
+          "name contains no recognizable verb"
+        ]
+      },
+      "remediation": "Use descriptive verb_noun format (e.g., get_document, search_users).",
+      "affected_entity": "gzip-file-as-resource"
+    }
+  ],
+  "total_events": 132,
+  "total_sessions": 4,
+  "tool_count": 15,
+  "call_count": 48,
+  "timestamp": "2026-05-31T21:11:05.680419Z"
+}

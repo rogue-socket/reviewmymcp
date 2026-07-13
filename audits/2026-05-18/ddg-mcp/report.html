@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCP Audit Report — duckduckgo-search</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; background: #fafafa; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+  .grade { display: inline-block; font-size: 2rem; font-weight: bold; padding: 0.25rem 0.75rem; border-radius: 6px; color: white; }
+  .grade-A { background: #2ecc71; } .grade-B { background: #3498db; } .grade-C { background: #f39c12; } .grade-D { background: #e74c3c; } .grade-F { background: #c0392b; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  th { background: #f0f0f0; }
+  .severity-critical { color: #c0392b; font-weight: bold; } .severity-high { color: #e74c3c; } .severity-medium { color: #f39c12; } .severity-low { color: #3498db; }
+  .finding { margin: 1rem 0; padding: 0.75rem; background: white; border-left: 4px solid #ddd; border-radius: 4px; }
+  .finding-critical { border-left-color: #c0392b; } .finding-high { border-left-color: #e74c3c; } .finding-medium { border-left-color: #f39c12; }
+  .remediation { color: #666; font-style: italic; margin-top: 0.25rem; }
+  details { margin: 0.5rem 0; }
+  summary { cursor: pointer; font-weight: bold; }
+  .meta { color: #666; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>MCP Server Audit Report</h1>
+<div class="meta">
+  <p>Server: <strong>duckduckgo-search</strong> v1.0.0</p>
+  <p>Protocol: 2025-11-25 | Events: 42 | Sessions: 1 | Tools: 2 | Calls: 18</p>
+  <p>Date: 2026-05-18 09:26 UTC</p>
+</div>
+
+<h2>Dimension Scores</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Score</th><th>Grade</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Skipped</th></tr></thead>
+  <tbody>
+
+  <tr>
+    <td>accuracy</td>
+    <td>68</td>
+    <td><span class="grade grade-C" style="font-size:1rem;padding:0.1rem 0.4rem;">C</span></td>
+    <td>-</td>
+    <td>4</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+
+  <tr>
+    <td>compliance</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+
+  <tr>
+    <td>composability</td>
+    <td>90</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+    <td>-</td>
+    <td>2</td>
+  </tr>
+
+  <tr>
+    <td>conformance</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+
+  <tr>
+    <td>discoverability</td>
+    <td>90</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+
+  <tr>
+    <td>efficiency</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+
+  <tr>
+    <td>performance</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>2</td>
+  </tr>
+
+  <tr>
+    <td>reliability</td>
+    <td>100</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+
+  <tr>
+    <td>security</td>
+    <td>90</td>
+    <td><span class="grade grade-A" style="font-size:1rem;padding:0.1rem 0.4rem;">A</span></td>
+    <td>-</td>
+    <td>-</td>
+    <td>1</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+
+  </tbody>
+</table>
+
+
+
+
+<h3>Skipped Checks</h3>
+<table>
+  <thead><tr><th>Check</th><th>Reason</th></tr></thead>
+  <tbody>
+
+  <tr><td>composability.idempotency-violation</td><td>fewer than 2 repeated call groups with 2+ successes (6 group(s) skipped)</td></tr>
+
+  <tr><td>composability.concurrency-safety</td><td>skipped 2 tool(s): need &gt;= 5 pairs and &gt;= 3 concurrent+sequential samples each</td></tr>
+
+  <tr><td>compliance.data-residency-signals</td><td>no expected_regions configured</td></tr>
+
+  <tr><td>performance.concurrent-session-scaling</td><td>need &gt;= 3 sessions, only 1 found</td></tr>
+
+  <tr><td>performance.throughput-degradation</td><td>need &gt;= 20 tool/call responses, only 6 found</td></tr>
+
+  </tbody>
+</table>
+
+
+<h2>Top Findings</h2>
+
+<div class="finding finding-high">
+  <span class="severity-high">[HIGH]</span>
+  <strong>accuracy.schema-misuse</strong>
+  <p>Tool `search`: 4 schema-invalid calls accepted</p>
+  <p>Server accepted 4 of 8 calls that violated the declared input schema.</p>
+  <p class="remediation">Fix: Either enforce schema validation or update the schema to match actual acceptance.</p>
+</div>
+
+<div class="finding finding-high">
+  <span class="severity-high">[HIGH]</span>
+  <strong>accuracy.schema-misuse</strong>
+  <p>Tool `fetch_content`: 4 schema-invalid calls accepted</p>
+  <p>Server accepted 4 of 8 calls that violated the declared input schema.</p>
+  <p class="remediation">Fix: Either enforce schema validation or update the schema to match actual acceptance.</p>
+</div>
+
+<div class="finding finding-high">
+  <span class="severity-high">[HIGH]</span>
+  <strong>accuracy.argument-validation-gap</strong>
+  <p>Tool `search` accepted 3 calls with missing required arguments</p>
+  <p>Server is not validating required fields, accepting incomplete input.</p>
+  <p class="remediation">Fix: Validate all required arguments and return an error when they are missing.</p>
+</div>
+
+<div class="finding finding-high">
+  <span class="severity-high">[HIGH]</span>
+  <strong>accuracy.argument-validation-gap</strong>
+  <p>Tool `fetch_content` accepted 3 calls with missing required arguments</p>
+  <p>Server is not validating required fields, accepting incomplete input.</p>
+  <p class="remediation">Fix: Validate all required arguments and return an error when they are missing.</p>
+</div>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>discoverability.description-clarity</strong>
+  <p>Tool `fetch_content` has unclear description (score 2/5)</p>
+  <p>The description is written entirely in Chinese (&#39;Fetch and parse webpage content from URL&#39;), which is functional but minimal. It states what the tool does in one short phrase but provides no guidance on when to use it, what content types it handles, how parsing works, what format is returned, or how it differs from similar tools. Parameter descriptions are also in Chinese only. An English-speaking agent (or mixed-language environment) would have to guess at usage details, and there&#39;s no mention of constraints like timeouts, supported schemes, JS rendering, or auth.</p>
+  <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+</div>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>composability.programmatic-readiness</strong>
+  <p>Tool `search` returns prose instead of structured data</p>
+  <p>2 of 3 responses appear to be unstructured text, making programmatic tool calling difficult.</p>
+  <p class="remediation">Fix: Return structured JSON data that can be programmatically consumed by agent code.</p>
+</div>
+
+<div class="finding finding-medium">
+  <span class="severity-medium">[MEDIUM]</span>
+  <strong>security.excessive-permissions</strong>
+  <p>Tool `fetch_content` indicates arbitrary network access without safeguards</p>
+  <p>Tool description suggests arbitrary network access capability with no mention of sandboxing or confirmation.</p>
+  <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
+</div>
+
+
+
+
+<details>
+  <summary>accuracy — 4 findings</summary>
+
+  <div class="finding finding-high">
+    <span class="severity-high">[HIGH]</span>
+    <strong>accuracy.schema-misuse</strong>
+    <p>Tool `search`: 4 schema-invalid calls accepted</p>
+    <p class="remediation">Fix: Either enforce schema validation or update the schema to match actual acceptance.</p>
+  </div>
+
+  <div class="finding finding-high">
+    <span class="severity-high">[HIGH]</span>
+    <strong>accuracy.schema-misuse</strong>
+    <p>Tool `fetch_content`: 4 schema-invalid calls accepted</p>
+    <p class="remediation">Fix: Either enforce schema validation or update the schema to match actual acceptance.</p>
+  </div>
+
+  <div class="finding finding-high">
+    <span class="severity-high">[HIGH]</span>
+    <strong>accuracy.argument-validation-gap</strong>
+    <p>Tool `search` accepted 3 calls with missing required arguments</p>
+    <p class="remediation">Fix: Validate all required arguments and return an error when they are missing.</p>
+  </div>
+
+  <div class="finding finding-high">
+    <span class="severity-high">[HIGH]</span>
+    <strong>accuracy.argument-validation-gap</strong>
+    <p>Tool `fetch_content` accepted 3 calls with missing required arguments</p>
+    <p class="remediation">Fix: Validate all required arguments and return an error when they are missing.</p>
+  </div>
+
+</details>
+
+
+
+
+
+<details>
+  <summary>composability — 1 findings</summary>
+
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>composability.programmatic-readiness</strong>
+    <p>Tool `search` returns prose instead of structured data</p>
+    <p class="remediation">Fix: Return structured JSON data that can be programmatically consumed by agent code.</p>
+  </div>
+
+</details>
+
+
+
+
+
+<details>
+  <summary>discoverability — 1 findings</summary>
+
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>discoverability.description-clarity</strong>
+    <p>Tool `fetch_content` has unclear description (score 2/5)</p>
+    <p class="remediation">Fix: Rewrite description to clearly explain what the tool does, when to use it, and key constraints.</p>
+  </div>
+
+</details>
+
+
+
+
+
+
+
+
+
+<details>
+  <summary>security — 1 findings</summary>
+
+  <div class="finding finding-medium">
+    <span class="severity-medium">[MEDIUM]</span>
+    <strong>security.excessive-permissions</strong>
+    <p>Tool `fetch_content` indicates arbitrary network access without safeguards</p>
+    <p class="remediation">Fix: Add sandboxing, confirmation mechanisms, or restrict scope of dangerous operations.</p>
+  </div>
+
+</details>
+
+
+
+<hr>
+<p class="meta">Generated by <a href="https://github.com/reviewmymcp/reviewmymcp">reviewmymcp</a> v0.1.0</p>
+</body>
+</html>

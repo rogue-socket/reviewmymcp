@@ -1,0 +1,523 @@
+"""Tests for CLI commands."""
+
+import json
+import tempfile
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+import reviewmymcp.cli as cli_module
+from reviewmymcp.cli import cli
+from reviewmymcp.judge.base import JudgeResponse
+
+
+def test_version():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--version"])
+    assert result.exit_code == 0
+    assert "0.1.0" in result.output
+
+
+def test_list_checks():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["list-checks"])
+    assert result.exit_code == 0
+    assert "efficiency" in result.output
+    assert "security" in result.output
+    assert "conformance" in result.output
+
+
+def test_replay_terminal(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--no-llm-judges"])
+    assert result.exit_code in (0, 1)  # 1 if findings, 0 if none
+    assert "Dimension Scores" in result.output
+
+
+def test_replay_warns_when_llm_judges_enabled(sample_stdio_log, monkeypatch):
+    class FastJudge:
+        provider_name = "test"
+
+        async def complete(self, request):
+            return JudgeResponse(
+                raw_text='{"score": 5, "rationale": "ok", "discrepancies": []}',
+                parsed={"score": 5, "rationale": "ok", "discrepancies": []},
+                provider="test",
+                model="test",
+            )
+
+    monkeypatch.setattr(cli_module, "_build_judge", lambda provider, model: FastJudge())
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--dimensions", "accuracy"])
+
+    assert result.exit_code in (0, 1)
+    assert "LLM judge checks enabled via anthropic" in result.stderr
+
+
+def test_replay_terminal_output_contract(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    output = result.output
+    assert "MCP Server Audit Report" in output
+    assert "Server: TestServer v2.0.0" in output
+    assert "Events: 13  Sessions: 1  Tools: 7  Calls: 4" in output
+    assert "Dimension Scores" in output
+    assert "Top Findings" in output
+    assert "[HIGH] accuracy.schema-misuse" in output
+    assert "Fix:" in output
+
+
+def test_replay_json(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code in (0, 1)
+    parsed = json.loads(result.output)
+    assert "dimension_scores" in parsed
+    assert "tool_count" in parsed
+
+
+def test_replay_json_reports_expected_fixture_findings(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    parsed = json.loads(result.output)
+    finding_ids = {f["check_id"] for f in parsed["top_findings"]}
+
+    assert parsed["call_count"] == 4
+    assert "accuracy.schema-misuse" in finding_ids
+    assert "composability.error-recovery-surface" in finding_ids
+    assert any(f["severity"] == "high" for f in parsed["top_findings"])
+
+
+def test_replay_json_output_contract(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    parsed = json.loads(result.output)
+
+    assert set(parsed) == {
+        "server_meta",
+        "dimension_scores",
+        "top_findings",
+        "total_events",
+        "total_sessions",
+        "tool_count",
+        "call_count",
+        "timestamp",
+    }
+    assert parsed["total_events"] == 13
+    assert parsed["total_sessions"] == 1
+    assert parsed["tool_count"] == 7
+    assert parsed["call_count"] == 4
+
+    first_dimension = parsed["dimension_scores"][0]
+    assert {
+        "dimension",
+        "score",
+        "grade",
+        "critical_count",
+        "high_count",
+        "medium_count",
+        "low_count",
+        "info_count",
+        "findings",
+        "checks_skipped",
+    } <= set(first_dimension)
+
+    first_finding = parsed["top_findings"][0]
+    assert first_finding["check_id"] == "accuracy.schema-misuse"
+    assert first_finding["severity"] == "high"
+    assert {
+        "check_id",
+        "severity",
+        "title",
+        "description",
+        "evidence",
+        "remediation",
+        "affected_entity",
+    } <= set(first_finding)
+
+
+def test_replay_large_log_json_stability(sample_stdio_log, tmp_path):
+    records = [json.loads(line) for line in sample_stdio_log.read_text().splitlines()]
+    large_log = tmp_path / "large.ndjson"
+
+    with large_log.open("w") as f:
+        for session_idx in range(25):
+            id_offset = session_idx * 100
+            for record in records:
+                clone = dict(record)
+                clone["session_id"] = f"sess-large-{session_idx}"
+                if isinstance(clone.get("id"), int):
+                    clone["id"] += id_offset
+                f.write(json.dumps(clone) + "\n")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(large_log), "--output", "json", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+    parsed = json.loads(result.output)
+    assert parsed["total_events"] == 13 * 25
+    assert parsed["total_sessions"] == 25
+    assert parsed["tool_count"] == 7
+    assert parsed["call_count"] == 4 * 25
+    assert len(parsed["dimension_scores"]) == 10
+    assert len(parsed["top_findings"]) == 10
+    assert parsed["top_findings"][0]["severity"] == "high"
+
+
+def test_replay_persistence_path_option_flags_unsafe_default(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "replay",
+            str(sample_stdio_log),
+            "--output",
+            "json",
+            "--dimensions",
+            "reliability",
+            "--no-llm-judges",
+            "--persistence-path",
+            "MEMORY_FILE_PATH=/tmp/memory.jsonl",
+        ],
+    )
+    assert result.exit_code in (0, 1)
+    parsed = json.loads(result.output)
+    finding_ids = [f["check_id"] for f in parsed["top_findings"]]
+    assert "reliability.unsafe-persistence-default" in finding_ids
+
+
+def test_runtime_metadata_pins_unversioned_npx_package(monkeypatch):
+    monkeypatch.setattr(cli_module, "_npm_view_version", lambda package_name: "1.1.0")
+    monkeypatch.setattr(cli_module, "_sha256_file", lambda path: "abc123")
+    monkeypatch.setattr(cli_module.shutil, "which", lambda executable: f"/usr/bin/{executable}")
+
+    meta = cli_module._resolve_runtime_metadata(["npx", "-y", "ddg-mcp-search"])
+
+    assert meta.package_manager == "npm"
+    assert meta.package_name == "ddg-mcp-search"
+    assert meta.package_version == "1.1.0"
+    assert meta.reproducible_command == "npx -y ddg-mcp-search@1.1.0"
+    assert meta.executable_sha256 == "abc123"
+
+
+def test_runtime_metadata_resolves_npm_dist_tag(monkeypatch):
+    seen_specs = []
+
+    def fake_npm_view_version(package_spec):
+        seen_specs.append(package_spec)
+        return "1.2.3"
+
+    monkeypatch.setattr(cli_module, "_npm_view_version", fake_npm_view_version)
+    monkeypatch.setattr(cli_module, "_sha256_file", lambda path: "")
+    monkeypatch.setattr(cli_module.shutil, "which", lambda executable: None)
+
+    meta = cli_module._resolve_runtime_metadata(["npx", "-y", "ddg-mcp-search@latest"])
+
+    assert seen_specs == ["ddg-mcp-search@latest"]
+    assert meta.package_name == "ddg-mcp-search"
+    assert meta.package_version == "1.2.3"
+    assert meta.reproducible_command == "npx -y ddg-mcp-search@1.2.3"
+
+
+def test_runtime_metadata_handles_scoped_pinned_npm_package():
+    name, version = cli_module._split_npm_package_spec("@scope/server@2.0.0")
+    assert name == "@scope/server"
+    assert version == "2.0.0"
+
+
+def test_npm_provenance_metadata_from_registry(monkeypatch):
+    monkeypatch.setattr(cli_module, "_url_reachable", lambda url: False)
+    monkeypatch.setattr(
+        cli_module,
+        "_npm_view_package_json",
+        lambda package_name: {
+            "repository": {"url": "git+https://github.com/example/deleted.git"},
+            "license": "MIT",
+            "time": {
+                "created": "2026-01-01T00:00:00.000Z",
+                "1.0.0": "2026-01-01T00:01:00.000Z",
+                "1.0.1": "2026-01-01T00:20:00.000Z",
+            },
+        },
+    )
+
+    provenance = cli_module._resolve_npm_provenance("example-package")
+
+    assert provenance.repository_url == "https://github.com/example/deleted"
+    assert provenance.source_reachable is False
+    assert provenance.license_declared == "MIT"
+    assert len(provenance.version_publish_times) == 2
+
+
+def test_replay_sarif(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "sarif", "--no-llm-judges"])
+    assert result.exit_code in (0, 1)
+    parsed = json.loads(result.output)
+    assert parsed["version"] == "2.1.0"
+
+
+def test_replay_html(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "html", "--no-llm-judges"])
+    assert result.exit_code in (0, 1)
+    assert "<html" in result.output
+
+
+def test_replay_to_file(sample_stdio_log):
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        path = f.name
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["replay", str(sample_stdio_log), "--output", "json", "--output-file", path, "--no-llm-judges"]
+    )
+    assert result.exit_code in (0, 1)
+    content = Path(path).read_text()
+    parsed = json.loads(content)
+    assert "dimension_scores" in parsed
+
+    Path(path).unlink()
+
+
+def test_replay_dimension_filter(sample_stdio_log):
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["replay", str(sample_stdio_log), "--output", "json", "--dimensions", "efficiency", "--no-llm-judges"]
+    )
+    parsed = json.loads(result.output)
+    dims = [ds["dimension"] for ds in parsed["dimension_scores"]]
+    assert dims == ["efficiency"]
+
+
+def test_diff_command(sample_stdio_log):
+    runner = CliRunner()
+
+    # Generate two identical reports
+    with (
+        tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f1,
+        tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f2,
+    ):
+        path1, path2 = f1.name, f2.name
+
+    runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--output-file", path1, "--no-llm-judges"])
+    runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--output-file", path2, "--no-llm-judges"])
+
+    result = runner.invoke(cli, ["diff", path1, path2])
+    assert result.exit_code == 0  # no regressions
+    assert "accuracy" in result.output
+
+    Path(path1).unlink()
+    Path(path2).unlink()
+
+
+def test_audit_no_target():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit"])
+    assert result.exit_code == 2
+
+
+def test_parse_server_command_honors_quoted_arguments():
+    assert cli_module._parse_server_command('python -m demo_server --label "two words"') == [
+        "python",
+        "-m",
+        "demo_server",
+        "--label",
+        "two words",
+    ]
+
+
+def test_replay_exits_1_with_critical_findings(sample_stdio_log):
+    """With --no-redact, the sample fixture exposes SSN and connection strings -> CRITICAL findings -> exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--no-redact", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+
+def test_audit_exits_1_with_critical_findings(sample_stdio_log):
+    """audit --log-file with --no-redact triggers CRITICAL security findings -> exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--log-file", str(sample_stdio_log), "--no-redact", "--no-llm-judges"])
+    assert result.exit_code == 1
+
+
+def test_audit_exits_0_without_high_or_critical_findings():
+    events = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "S", "version": "1.0"}}},
+    ]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
+        path = f.name
+        for event in events:
+            f.write(json.dumps(event) + "\n")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--log-file", path, "--no-llm-judges"])
+    assert result.exit_code == 0
+
+    Path(path).unlink()
+
+
+def test_audit_config_applies_output_dimensions_and_severity(sample_stdio_log, tmp_path):
+    config_path = tmp_path / "audit-config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "dimensions": ["accuracy"],
+                "min_severity": "critical",
+                "output_format": "json",
+            }
+        )
+    )
+
+    runner = CliRunner()
+    filtered = runner.invoke(
+        cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--no-llm-judges"]
+    )
+    filtered_report = json.loads(filtered.output)
+
+    assert filtered.exit_code == 0
+    assert [score["dimension"] for score in filtered_report["dimension_scores"]] == ["accuracy"]
+    assert filtered_report["top_findings"] == []
+
+    overridden = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--log-file",
+            str(sample_stdio_log),
+            "--config",
+            str(config_path),
+            "--severity",
+            "high",
+            "--no-llm-judges",
+        ],
+    )
+    overridden_report = json.loads(overridden.output)
+
+    assert overridden.exit_code == 1
+    assert [finding["severity"] for finding in overridden_report["top_findings"]] == ["high"]
+
+
+def test_audit_config_applies_output_file_and_redaction_settings(sample_stdio_log, tmp_path, monkeypatch):
+    config_path = tmp_path / "audit-config.json"
+    output_path = tmp_path / "audit-report.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output_format": "json",
+                "output_file": str(output_path),
+                "redaction": {"enabled": False, "extra_patterns": ["INTERNAL-[0-9]+"]},
+            }
+        )
+    )
+
+    from reviewmymcp.ingest import file_loader
+    from reviewmymcp.ingest.schema import Transport
+
+    original_load_file = file_loader.load_file
+    seen: dict = {}
+
+    def load_file_spy(*args, **kwargs):
+        seen.update(kwargs)
+        return original_load_file(*args, **kwargs)
+
+    monkeypatch.setattr(file_loader, "load_file", load_file_spy)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--no-llm-judges"]
+    )
+
+    assert result.exit_code == 1
+    assert seen == {"transport": Transport.STDIO, "redact": False, "extra_redaction_patterns": ["INTERNAL-[0-9]+"]}
+    assert json.loads(output_path.read_text())["total_events"] == 13
+
+
+def test_audit_config_applies_scoring_values(sample_stdio_log, tmp_path):
+    config_path = tmp_path / "audit-config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "dimensions": ["accuracy"],
+                "min_severity": "high",
+                "output_format": "json",
+                "scoring": {"severity_weights": {"high": 20.0}, "curve_factor": 2.0},
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--no-llm-judges"]
+    )
+    report = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert report["dimension_scores"][0]["score"] == 91.1
+
+
+def test_audit_config_applies_efficiency_thresholds(tmp_path):
+    log_path = tmp_path / "tools.ndjson"
+    config_path = tmp_path / "audit-config.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {"tools": [{"name": "search", "description": "word " * 20, "inputSchema": {}}]},
+                "direction": "server_to_client",
+            }
+        )
+        + "\n"
+    )
+    config_path.write_text(
+        json.dumps(
+            {
+                "dimensions": ["efficiency"],
+                "output_format": "json",
+                "thresholds": {"description_bloat_single": 1},
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--log-file", str(log_path), "--config", str(config_path), "--no-llm-judges"])
+    report = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert report["top_findings"][0]["check_id"] == "efficiency.description-bloat"
+
+
+def test_audit_config_uses_judge_provider_unless_cli_overrides(sample_stdio_log, tmp_path, monkeypatch):
+    config_path = tmp_path / "audit-config.json"
+    config_path.write_text(json.dumps({"judge": {"provider": "gemini"}}))
+    providers: list[str] = []
+
+    def build_judge(provider: str, model: str):
+        providers.append(provider)
+        return None
+
+    monkeypatch.setattr(cli_module, "_build_judge", build_judge)
+    runner = CliRunner()
+
+    runner.invoke(cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path)])
+    runner.invoke(
+        cli,
+        ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--judge-provider", "openai"],
+    )
+
+    assert providers == ["gemini", "openai"]
+
+
+@pytest.fixture
+def sample_stdio_log():
+    return Path(__file__).parent / "fixtures" / "sample_stdio_log.ndjson"
