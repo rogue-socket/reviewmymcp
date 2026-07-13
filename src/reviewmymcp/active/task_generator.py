@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from reviewmymcp.active.models import ActiveTask, TaskCategory
 from reviewmymcp.ingest.schema import ToolDefinition
 from reviewmymcp.judge.base import JudgeRequest, JudgeResponse, parse_json_response
+
+logger = logging.getLogger(__name__)
 
 TASK_SYSTEM = """\
 You generate test tasks for an MCP server's tools. Each task is a natural-language \
@@ -43,14 +47,12 @@ class TaskGenerator:
         if self._judge and tools:
             try:
                 return await self._llm_generate(tools, categories)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("LLM task generation failed; using fallback tasks: %s", exc)
 
         return self._fallback_generate(tools, categories)
 
-    async def _llm_generate(
-        self, tools: list[ToolDefinition], categories: list[TaskCategory]
-    ) -> list[ActiveTask]:
+    async def _llm_generate(self, tools: list[ToolDefinition], categories: list[TaskCategory]) -> list[ActiveTask]:
         import json
 
         tools_json = json.dumps(
@@ -89,9 +91,7 @@ class TaskGenerator:
             )
         return tasks or self._fallback_generate(tools, categories)
 
-    def _fallback_generate(
-        self, tools: list[ToolDefinition], categories: list[TaskCategory]
-    ) -> list[ActiveTask]:
+    def _fallback_generate(self, tools: list[ToolDefinition], categories: list[TaskCategory]) -> list[ActiveTask]:
         tasks: list[ActiveTask] = []
         tool_names = [t.name for t in tools]
 
@@ -122,8 +122,7 @@ class TaskGenerator:
                     ActiveTask(
                         category=cat,
                         description=(
-                            f"First use '{tools[0].name}' to get some data, "
-                            f"then use '{tools[1].name}' with that data."
+                            f"First use '{tools[0].name}' to get some data, then use '{tools[1].name}' with that data."
                         ),
                         expected_tools=[tools[0].name, tools[1].name],
                         success_criteria="Agent chains two tools using output from the first as input to the second.",

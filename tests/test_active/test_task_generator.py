@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from reviewmymcp.active.models import TaskCategory
@@ -81,3 +83,18 @@ async def test_single_tool_only():
 
     # multi_step requires >= 2 tools, so no task generated
     assert len(tasks) == 0
+
+
+@pytest.mark.asyncio
+async def test_llm_generation_failure_warns_before_falling_back(caplog):
+    class FailingJudge:
+        async def complete(self, request):
+            raise RuntimeError("provider unavailable")
+
+    generator = TaskGenerator(judge_provider=FailingJudge())
+
+    with caplog.at_level(logging.WARNING):
+        tasks = await generator.generate_tasks(_make_tools(), categories=[TaskCategory.DISCOVERY])
+
+    assert [task.category for task in tasks] == [TaskCategory.DISCOVERY]
+    assert "LLM task generation failed; using fallback tasks: provider unavailable" in caplog.messages
