@@ -11,7 +11,9 @@ from reviewmymcp.ingest.schema import Direction
 def test_load_ndjson():
     lines = [
         json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}, "direction": "client_to_server"}),
-        json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "S"}}, "direction": "server_to_client"}),
+        json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "S"}}, "direction": "server_to_client"}
+        ),
     ]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
         f.write("\n".join(lines))
@@ -44,12 +46,14 @@ def test_load_json_array():
 
 def test_load_with_wrapper_object():
     lines = [
-        json.dumps({
-            "direction": "client_to_server",
-            "timestamp": "2025-01-15T10:00:00Z",
-            "session_id": "s1",
-            "message": {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
-        }),
+        json.dumps(
+            {
+                "direction": "client_to_server",
+                "timestamp": "2025-01-15T10:00:00Z",
+                "session_id": "s1",
+                "message": {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            }
+        ),
     ]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
         f.write("\n".join(lines))
@@ -64,11 +68,13 @@ def test_load_with_wrapper_object():
 
 
 def test_load_with_stress_flag():
-    line = json.dumps({
-        "direction": "client_to_server",
-        "is_stress": True,
-        "message": {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search"}},
-    })
+    line = json.dumps(
+        {
+            "direction": "client_to_server",
+            "is_stress": True,
+            "message": {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search"}},
+        }
+    )
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
         f.write(line)
         path = f.name
@@ -80,13 +86,15 @@ def test_load_with_stress_flag():
 
 
 def test_load_with_timestamp_parsing():
-    line = json.dumps({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "ping",
-        "timestamp": "2025-06-15T12:30:00Z",
-        "direction": "client_to_server",
-    })
+    line = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "ping",
+            "timestamp": "2025-06-15T12:30:00Z",
+            "direction": "client_to_server",
+        }
+    )
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
         f.write(line)
         path = f.name
@@ -99,12 +107,14 @@ def test_load_with_timestamp_parsing():
 
 
 def test_load_with_redaction():
-    line = json.dumps({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": {"content": [{"type": "text", "text": "key: sk-abcdefghijklmnopqrstuvwxyz"}]},
-        "direction": "server_to_client",
-    })
+    line = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {"content": [{"type": "text", "text": "key: sk-abcdefghijklmnopqrstuvwxyz"}]},
+            "direction": "server_to_client",
+        }
+    )
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ndjson", delete=False) as f:
         f.write(line)
         path = f.name

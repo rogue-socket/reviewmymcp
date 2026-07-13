@@ -38,9 +38,11 @@ def test_normalize_extracts_task_id():
 
 def test_extract_server_meta():
     init_req, init_resp = make_init_pair()
-    tools_req, tools_resp = make_tools_list_pair([
-        {"name": "search", "description": "Search things", "inputSchema": {"type": "object"}},
-    ])
+    tools_req, tools_resp = make_tools_list_pair(
+        [
+            {"name": "search", "description": "Search things", "inputSchema": {"type": "object"}},
+        ]
+    )
 
     meta = extract_server_meta([init_req, init_resp, tools_req, tools_resp])
     assert meta.server_name == "TestServer"
@@ -54,14 +56,16 @@ def test_extract_server_meta():
 
 def test_extract_server_meta_preserves_auth_scope_metadata():
     init_req, init_resp = make_init_pair()
-    tools_req, tools_resp = make_tools_list_pair([
-        {
-            "name": "update_issue",
-            "description": "Update an issue",
-            "inputSchema": {"type": "object"},
-            "requiredScopes": ["event:write"],
-        },
-    ])
+    tools_req, tools_resp = make_tools_list_pair(
+        [
+            {
+                "name": "update_issue",
+                "description": "Update an issue",
+                "inputSchema": {"type": "object"},
+                "requiredScopes": ["event:write"],
+            },
+        ]
+    )
     scope_resp = make_event(
         is_response=True,
         result={"auth": {"scopes_used": ["event:read"]}},
@@ -76,14 +80,16 @@ def test_extract_server_meta_preserves_auth_scope_metadata():
 
 
 def test_extract_tool_definitions_preserves_output_schema():
-    tools_req, tools_resp = make_tools_list_pair([
-        {
-            "name": "structured",
-            "description": "Return structured output",
-            "inputSchema": {"type": "object"},
-            "outputSchema": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
-        },
-    ])
+    tools_req, tools_resp = make_tools_list_pair(
+        [
+            {
+                "name": "structured",
+                "description": "Return structured output",
+                "inputSchema": {"type": "object"},
+                "outputSchema": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+            },
+        ]
+    )
 
     tools = extract_tool_definitions([tools_req, tools_resp])
 
@@ -91,10 +97,12 @@ def test_extract_tool_definitions_preserves_output_schema():
 
 
 def test_extract_tool_definitions():
-    tools_req, tools_resp = make_tools_list_pair([
-        {"name": "a", "description": "Tool A", "inputSchema": {}},
-        {"name": "b", "description": "Tool B", "inputSchema": {}},
-    ])
+    tools_req, tools_resp = make_tools_list_pair(
+        [
+            {"name": "a", "description": "Tool A", "inputSchema": {}},
+            {"name": "b", "description": "Tool B", "inputSchema": {}},
+        ]
+    )
     tools = extract_tool_definitions([tools_req, tools_resp])
     assert len(tools) == 2
     assert {t.name for t in tools} == {"a", "b"}

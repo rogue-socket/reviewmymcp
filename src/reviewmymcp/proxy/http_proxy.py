@@ -64,15 +64,13 @@ class HttpProxy:
         if body:
             self._capture_request(body, headers, session_id)
 
-        if request.method == "GET":
-            return await self._handle_sse_get(upstream_url, headers, session_id)
-
-        upstream_response = await self._client.request(
+        upstream_request = self._client.build_request(
             method=request.method,
             url=upstream_url,
             headers=headers,
             content=body,
         )
+        upstream_response = await self._client.send(upstream_request, stream=True)
 
         response_headers = dict(upstream_response.headers)
         if not session_id:
@@ -81,9 +79,10 @@ class HttpProxy:
         content_type = response_headers.get("content-type", "")
 
         if "text/event-stream" in content_type:
-            return await self._handle_sse_response(upstream_url, headers, body, session_id)
+            return self._stream_sse_response(upstream_response, session_id)
 
-        response_body = upstream_response.content
+        response_body = await upstream_response.aread()
+        await upstream_response.aclose()
         self._capture_response(response_body, response_headers, session_id, upstream_response.status_code)
 
         return Response(
@@ -96,33 +95,31 @@ class HttpProxy:
             },
         )
 
-    async def _handle_sse_get(self, url: str, headers: dict, session_id: str | None) -> StreamingResponse:
+    def _stream_sse_response(self, upstream_response: httpx.Response, session_id: str | None) -> StreamingResponse:
         async def event_stream():
-            async with self._client.stream("GET", url, headers=headers) as response:
+            try:
                 sse_buffer = ""
-                async for chunk in response.aiter_text():
+                async for chunk in upstream_response.aiter_text():
                     sse_buffer += chunk
                     while "\n\n" in sse_buffer:
                         event_text, sse_buffer = sse_buffer.split("\n\n", 1)
                         self._capture_sse_event(event_text, session_id)
                         yield event_text + "\n\n"
+                if sse_buffer:
+                    self._capture_sse_event(sse_buffer, session_id)
+                    yield sse_buffer
+            finally:
+                await upstream_response.aclose()
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-    async def _handle_sse_response(
-        self, url: str, headers: dict, body: bytes, session_id: str | None
-    ) -> StreamingResponse:
-        async def event_stream():
-            async with self._client.stream("POST", url, headers=headers, content=body) as response:
-                sse_buffer = ""
-                async for chunk in response.aiter_text():
-                    sse_buffer += chunk
-                    while "\n\n" in sse_buffer:
-                        event_text, sse_buffer = sse_buffer.split("\n\n", 1)
-                        self._capture_sse_event(event_text, session_id)
-                        yield event_text + "\n\n"
-
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
+        return StreamingResponse(
+            event_stream(),
+            status_code=upstream_response.status_code,
+            headers={
+                key: value
+                for key, value in upstream_response.headers.items()
+                if key.lower() not in ("content-length", "transfer-encoding", "content-encoding")
+            },
+        )
 
     def _capture_request(self, body: bytes, headers: dict, session_id: str | None) -> None:
         try:

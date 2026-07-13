@@ -75,6 +75,31 @@ def test_correlate_respects_session_boundary():
     assert events[1].request_event_id is None
 
 
+def test_correlate_handles_sequential_reuse_of_jsonrpc_id():
+    base = datetime(2025, 1, 1, tzinfo=UTC)
+    events = correlate(
+        [
+            make_event(event_id="req-1", method="tools/list", is_request=True, jsonrpc_id=1, timestamp=base),
+            make_event(event_id="resp-1", is_response=True, jsonrpc_id=1, timestamp=base + timedelta(milliseconds=10)),
+            make_event(
+                event_id="req-2",
+                method="tools/call",
+                is_request=True,
+                jsonrpc_id=1,
+                timestamp=base + timedelta(milliseconds=20),
+            ),
+            make_event(event_id="resp-2", is_response=True, jsonrpc_id=1, timestamp=base + timedelta(milliseconds=50)),
+        ]
+    )
+
+    assert events[1].request_event_id == "req-1"
+    assert events[1].method == "tools/list"
+    assert events[1].latency_ms == pytest.approx(10, abs=1)
+    assert events[3].request_event_id == "req-2"
+    assert events[3].method == "tools/call"
+    assert events[3].latency_ms == pytest.approx(30, abs=1)
+
+
 def test_get_sessions():
     events = [
         make_event(session_id="a"),

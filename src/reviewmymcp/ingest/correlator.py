@@ -13,11 +13,9 @@ def correlate(events: list[McpEvent]) -> list[McpEvent]:
         if event.is_request and event.jsonrpc_id is not None:
             key = (event.session_id, event.jsonrpc_id)
             request_index[key] = event
-
-    for event in events:
-        if event.is_response and event.jsonrpc_id is not None:
+        elif event.is_response and event.jsonrpc_id is not None:
             key = (event.session_id, event.jsonrpc_id)
-            request = request_index.get(key)
+            request = request_index.pop(key, None)
             if request:
                 event.request_event_id = request.event_id
                 if event.method is None:

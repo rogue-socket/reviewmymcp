@@ -96,9 +96,7 @@ def _extract_embedded_jsonrpc(input_path: Path) -> list[dict[str, Any]]:
             continue
         records.append({"direction": _direction_hint(line), "message": message})
     if not records:
-        raise ValueError(
-            "No embedded JSON-RPC messages found. Use `reviewmymcp watch` to capture wire-level traffic."
-        )
+        raise ValueError("No embedded JSON-RPC messages found. Use `reviewmymcp watch` to capture wire-level traffic.")
     return records
 
 

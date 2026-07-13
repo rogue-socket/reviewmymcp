@@ -97,9 +97,7 @@ def extract_server_meta(events: list[McpEvent]) -> ServerMeta:
     tools = extract_tool_definitions(events)
     if tools:
         meta.tools = tools
-        meta.auth.scopes_required = {
-            tool.name: tool.required_scopes for tool in tools if tool.required_scopes
-        }
+        meta.auth.scopes_required = {tool.name: tool.required_scopes for tool in tools if tool.required_scopes}
 
     scopes_used = extract_auth_scopes_used(events)
     if scopes_used:
