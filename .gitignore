@@ -9,3 +9,6 @@ build/
 .ruff_cache/
 .venv/
 *.log
+handoffs/
+backlog.md
+.claude/
