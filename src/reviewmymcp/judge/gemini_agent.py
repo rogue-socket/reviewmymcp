@@ -123,15 +123,19 @@ def _convert_messages(messages: list[dict[str, Any]]) -> list[Content]:
                     if block.get("type") == "text":
                         parts.append(Part(text=block["text"]))
                     elif block.get("type") == "tool_use":
-                        parts.append(Part.from_function_call(
-                            name=block["name"],
-                            args=block.get("input", {}),
-                        ))
+                        parts.append(
+                            Part.from_function_call(
+                                name=block["name"],
+                                args=block.get("input", {}),
+                            )
+                        )
                     elif block.get("type") == "tool_result":
-                        parts.append(Part.from_function_response(
-                            name=block.get("tool_use_id", "unknown"),
-                            response={"result": block.get("content", "")},
-                        ))
+                        parts.append(
+                            Part.from_function_response(
+                                name=block.get("tool_use_id", "unknown"),
+                                response={"result": block.get("content", "")},
+                            )
+                        )
                 elif isinstance(block, str):
                     parts.append(Part(text=block))
             if parts:

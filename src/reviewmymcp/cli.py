@@ -62,12 +62,15 @@ def _build_judge(provider_name: str, model: str):
     """Construct a JudgeProvider from config strings. Returns None on failure."""
     if provider_name == "anthropic":
         from reviewmymcp.judge.anthropic_judge import AnthropicJudge
+
         return AnthropicJudge(model=model) if model else AnthropicJudge()
     elif provider_name == "gemini":
         from reviewmymcp.judge.gemini_judge import GeminiJudge
+
         return GeminiJudge(model=model) if model else GeminiJudge()
     elif provider_name == "openai":
         from reviewmymcp.judge.openai_judge import OpenAIJudge
+
         return OpenAIJudge(model=model) if model else OpenAIJudge()
     return None
 
@@ -81,6 +84,33 @@ def _warn_llm_judges_enabled(provider_name: str) -> None:
 
 def _merge_auth_scopes(discovered: list[str], configured: list[str] | tuple[str, ...]) -> list[str]:
     return sorted({scope for scope in [*discovered, *configured] if scope})
+
+
+def _parse_server_command(target: str) -> list[str]:
+    try:
+        command = shlex.split(target)
+    except ValueError as exc:
+        raise click.BadParameter(f"invalid server command: {exc}") from exc
+    if not command:
+        raise click.BadParameter("server command cannot be empty")
+    return command
+
+
+def _filter_results_by_severity(results, min_severity: str):
+    from reviewmymcp.evaluators.base import Severity
+
+    ranks = {
+        Severity.CRITICAL: 0,
+        Severity.HIGH: 1,
+        Severity.MEDIUM: 2,
+        Severity.LOW: 3,
+        Severity.INFO: 4,
+    }
+    minimum_rank = ranks[Severity(min_severity)]
+    return [
+        result.model_copy(update={"findings": [f for f in result.findings if ranks[f.severity] <= minimum_rank]})
+        for result in results
+    ]
 
 
 PERSISTENCE_ENV_SUFFIXES = (
@@ -197,7 +227,7 @@ def _npm_package_spec(command: list[str]) -> str:
 def _split_npm_package_spec(spec: str) -> tuple[str, str]:
     version_sep = spec.rfind("@")
     if version_sep > 0:
-        return spec[:version_sep], spec[version_sep + 1:]
+        return spec[:version_sep], spec[version_sep + 1 :]
     return spec, ""
 
 
@@ -284,18 +314,20 @@ def _sha256_file(path: str) -> str:
     "--output",
     "output_format",
     type=click.Choice(["terminal", "json", "html", "sarif"]),
-    default="terminal",
+    default=None,
 )
 @click.option("--output-file", type=click.Path(), default=None)
 @click.option("--dimensions", type=str, default=None, help="Comma-separated dimensions to run")
-@click.option("--severity", type=click.Choice(["critical", "high", "medium", "low", "info"]), default="info")
+@click.option("--severity", type=click.Choice(["critical", "high", "medium", "low", "info"]), default=None)
 @click.option("--config", "config_path", type=click.Path(exists=True), default=None)
 @click.option("--no-redact", is_flag=True, default=False)
 @click.option("--no-llm-judges", is_flag=True, default=False)
-@click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
-@click.option("--judge-model", type=str, default="")
+@click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default=None)
+@click.option("--judge-model", type=str, default=None)
 @click.option("--auth-scope", multiple=True, help="Auth scope present in the audit token; repeat for multiple scopes")
-@click.option("--persistence-path", multiple=True, help="Known persistence location as KEY=PATH; repeat for multiple paths")
+@click.option(
+    "--persistence-path", multiple=True, help="Known persistence location as KEY=PATH; repeat for multiple paths"
+)
 @click.option("--stress", is_flag=True, default=False, help="Run high-volume stress traffic against live stdio targets")
 @click.option("--stress-calls", type=click.IntRange(min=1), default=50, show_default=True)
 @click.option("--stress-duration", type=float, default=30.0, show_default=True)
@@ -303,15 +335,15 @@ def audit(
     target: str | None,
     log_file: str | None,
     transport: str | None,
-    output_format: str,
+    output_format: str | None,
     output_file: str | None,
     dimensions: str | None,
-    severity: str,
+    severity: str | None,
     config_path: str | None,
     no_redact: bool,
     no_llm_judges: bool,
-    judge_provider: str,
-    judge_model: str,
+    judge_provider: str | None,
+    judge_model: str | None,
     auth_scope: tuple[str, ...],
     persistence_path: tuple[str, ...],
     stress: bool,
@@ -335,9 +367,14 @@ def audit(
     else:
         audit_config = AuditConfig.default()
 
-    audit_config.judge.provider = judge_provider
+    if judge_provider:
+        audit_config.judge.provider = judge_provider
     if judge_model:
         audit_config.judge.model = judge_model
+    effective_output_format = output_format or audit_config.output_format
+    effective_output_file = output_file or audit_config.output_file
+    effective_min_severity = severity or audit_config.min_severity
+    effective_redact = audit_config.redaction.enabled and not no_redact
     cli_persistence_paths = _parse_keyed_paths(persistence_path)
 
     if not log_file and not target:
@@ -346,9 +383,17 @@ def audit(
 
     if log_file:
         if stress:
-            click.echo("Stress replay mode: evaluating any stress-tagged events in the log; no traffic will be issued.", err=True)
+            click.echo(
+                "Stress replay mode: evaluating any stress-tagged events in the log; no traffic will be issued.",
+                err=True,
+            )
         tp = Transport(transport) if transport else Transport.STDIO
-        events = load_file(log_file, transport=tp, redact=not no_redact)
+        events = load_file(
+            log_file,
+            transport=tp,
+            redact=effective_redact,
+            extra_redaction_patterns=audit_config.redaction.extra_patterns,
+        )
     else:
         import asyncio
 
@@ -356,8 +401,9 @@ def audit(
             _run_synthetic_audit(
                 target,
                 transport,
-                not no_redact,
+                effective_redact,
                 audit_config,
+                extra_redaction_patterns=audit_config.redaction.extra_patterns,
                 stress=stress,
                 stress_calls=stress_calls,
                 stress_duration=stress_duration,
@@ -367,7 +413,7 @@ def audit(
     events = correlate(events)
     server_meta = extract_server_meta(events)
     if not log_file and target:
-        server_meta.runtime = _resolve_runtime_metadata(target.split())
+        server_meta.runtime = _resolve_runtime_metadata(_parse_server_command(target))
         if server_meta.runtime.package_manager == "npm" and server_meta.runtime.package_name:
             server_meta.provenance = _resolve_npm_provenance(server_meta.runtime.package_name)
     server_meta.auth.scopes_used = _merge_auth_scopes(
@@ -385,36 +431,47 @@ def audit(
         server_meta.persistence.working_directory = str(Path.cwd())
     sessions = get_sessions(events)
 
-    dim_list = [d.strip() for d in dimensions.split(",")] if dimensions else None
+    dim_list = [d.strip() for d in dimensions.split(",")] if dimensions else audit_config.dimensions
 
     judge_adapter = None
     if not no_llm_judges:
         from reviewmymcp.judge.base import SyncJudgeAdapter
+
         judge_instance = _build_judge(audit_config.judge.provider, audit_config.judge.model)
         if judge_instance:
             _warn_llm_judges_enabled(audit_config.judge.provider)
             judge_adapter = SyncJudgeAdapter(judge_instance)
 
     eval_config = EvaluatorConfig(
-        thresholds=audit_config.thresholds,
         judge_provider=audit_config.judge.provider,
         judge_model=audit_config.judge.model,
         judge=judge_adapter,
+        thresholds=audit_config.thresholds,
         extra=audit_config.model_dump(),
     )
 
-    results = run_all(events, server_meta, eval_config, dimensions=dim_list)
+    try:
+        results = run_all(events, server_meta, eval_config, dimensions=dim_list)
+        results = _filter_results_by_severity(results, effective_min_severity)
 
-    tool_count = len(server_meta.tools)
-    call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
-    report = grade_results(
-        results, server_meta,
-        total_events=len(events), total_sessions=len(sessions),
-        tool_count=tool_count, call_count=call_count,
-    )
+        tool_count = len(server_meta.tools)
+        call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
+        report = grade_results(
+            results,
+            server_meta,
+            total_events=len(events),
+            total_sessions=len(sessions),
+            tool_count=tool_count,
+            call_count=call_count,
+            severity_weights=audit_config.scoring.severity_weights,
+            score_curve_factor=audit_config.scoring.curve_factor,
+        )
 
-    _output_report(report, output_format, output_file)
-    sys.exit(1 if any(f.severity.value in ("critical", "high") for f in report.top_findings) else 0)
+        _output_report(report, effective_output_format, effective_output_file)
+        sys.exit(1 if any(f.severity.value in ("critical", "high") for f in report.top_findings) else 0)
+    finally:
+        if judge_adapter:
+            judge_adapter.close()
 
 
 @cli.command()
@@ -432,7 +489,9 @@ def audit(
 @click.option("--judge-provider", type=click.Choice(["anthropic", "gemini", "openai"]), default="anthropic")
 @click.option("--judge-model", type=str, default="")
 @click.option("--auth-scope", multiple=True, help="Auth scope present in the audit token; repeat for multiple scopes")
-@click.option("--persistence-path", multiple=True, help="Known persistence location as KEY=PATH; repeat for multiple paths")
+@click.option(
+    "--persistence-path", multiple=True, help="Known persistence location as KEY=PATH; repeat for multiple paths"
+)
 @click.option("--stress", is_flag=True, default=False, help="Evaluate stress-tagged events in the replay log")
 @click.option("--stress-calls", type=click.IntRange(min=1), default=50, show_default=True)
 @click.option("--stress-duration", type=float, default=30.0, show_default=True)
@@ -475,6 +534,7 @@ def replay(
     judge_adapter = None
     if not no_llm_judges:
         from reviewmymcp.judge.base import SyncJudgeAdapter
+
         judge_instance = _build_judge(judge_provider, judge_model)
         if judge_instance:
             _warn_llm_judges_enabled(judge_provider)
@@ -486,18 +546,25 @@ def replay(
         judge_model=judge_model,
         judge=judge_adapter,
     )
-    results = run_all(events, server_meta, eval_config, dimensions=dim_list)
+    try:
+        results = run_all(events, server_meta, eval_config, dimensions=dim_list)
 
-    tool_count = len(server_meta.tools)
-    call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
-    report = grade_results(
-        results, server_meta,
-        total_events=len(events), total_sessions=len(sessions),
-        tool_count=tool_count, call_count=call_count,
-    )
+        tool_count = len(server_meta.tools)
+        call_count = sum(1 for e in events if e.is_request and e.method == "tools/call")
+        report = grade_results(
+            results,
+            server_meta,
+            total_events=len(events),
+            total_sessions=len(sessions),
+            tool_count=tool_count,
+            call_count=call_count,
+        )
 
-    _output_report(report, output_format, output_file)
-    sys.exit(1 if any(f.severity.value in ("critical", "high") for f in report.top_findings) else 0)
+        _output_report(report, output_format, output_file)
+        sys.exit(1 if any(f.severity.value in ("critical", "high") for f in report.top_findings) else 0)
+    finally:
+        if judge_adapter:
+            judge_adapter.close()
 
 
 @cli.command()
@@ -616,9 +683,18 @@ def active_audit(
 
     asyncio.run(
         _run_active_audit(
-            target, agent_provider, agent_model, judge_provider, judge_model,
-            max_turns, output_format, output_file, categories,
-            readonly, allow_mutations, trace_file,
+            target,
+            agent_provider,
+            agent_model,
+            judge_provider,
+            judge_model,
+            max_turns,
+            output_format,
+            output_file,
+            categories,
+            readonly,
+            allow_mutations,
+            trace_file,
         )
     )
 
@@ -669,7 +745,7 @@ async def _run_active_audit(
     judge_instance = _build_judge(judge_provider_name, judge_model)
 
     # Start MCP server
-    server_command = target.split()
+    server_command = _parse_server_command(target)
     driver = StdioAgentDriver(server_command=server_command, redact=True)
 
     try:
@@ -763,12 +839,15 @@ def _build_agent_provider(provider_name: str, model: str):
     """Construct an AgentProvider from config strings."""
     if provider_name == "anthropic":
         from reviewmymcp.judge.anthropic_agent import AnthropicAgentProvider
+
         return AnthropicAgentProvider(model=model) if model else AnthropicAgentProvider()
     elif provider_name == "openai":
         from reviewmymcp.judge.openai_agent import OpenAIAgentProvider
+
         return OpenAIAgentProvider(model=model) if model else OpenAIAgentProvider()
     elif provider_name == "gemini":
         from reviewmymcp.judge.gemini_agent import GeminiAgentProvider
+
         return GeminiAgentProvider(model=model) if model else GeminiAgentProvider()
     return None
 
@@ -798,8 +877,12 @@ def _output_active_report(report, output_format: str, output_file: str | None, c
         # Task outcomes
         console.print(f"\nTasks: {report.total_tasks}  Turns: {report.total_turns}")
         for ex in report.task_executions:
-            status = {"success": "[green]OK[/green]", "partial": "[yellow]PARTIAL[/yellow]",
-                       "failure": "[red]FAIL[/red]", "gave_up": "[red]GAVE UP[/red]"}.get(ex.outcome, ex.outcome)
+            status = {
+                "success": "[green]OK[/green]",
+                "partial": "[yellow]PARTIAL[/yellow]",
+                "failure": "[red]FAIL[/red]",
+                "gave_up": "[red]GAVE UP[/red]",
+            }.get(ex.outcome, ex.outcome)
             console.print(f"  [{ex.task.category.value}] {status} {ex.task.description[:70]}")
 
         if output_file:
@@ -858,6 +941,7 @@ async def _run_synthetic_audit(
     transport: str | None,
     redact: bool,
     audit_config,
+    extra_redaction_patterns: list[str] | None = None,
     stress: bool = False,
     stress_calls: int = 50,
     stress_duration: float = 30.0,
@@ -873,8 +957,12 @@ async def _run_synthetic_audit(
         click.echo("HTTP synthetic audit not yet supported. Use stdio (pass a server command).", err=True)
         sys.exit(2)
 
-    server_command = target.split()
-    driver = StdioAgentDriver(server_command=server_command, redact=redact)
+    server_command = _parse_server_command(target)
+    driver = StdioAgentDriver(
+        server_command=server_command,
+        redact=redact,
+        extra_redaction_patterns=extra_redaction_patterns,
+    )
 
     try:
         await driver.start()
@@ -993,7 +1081,7 @@ def watch(target: str, output_dir: str, transport: str | None, no_redact: bool) 
 
         log_path = Path(output_dir) / "mcp_traffic.ndjson"
         click.echo(f"Logging to {log_path}", err=True)
-        server_command = target.split()
+        server_command = _parse_server_command(target)
         exit_code, events = asyncio.run(run_stdio_proxy(server_command, log_file=str(log_path), redact=not no_redact))
         click.echo(f"Server exited with code {exit_code}. Captured {len(events)} events.", err=True)
         sys.exit(exit_code)

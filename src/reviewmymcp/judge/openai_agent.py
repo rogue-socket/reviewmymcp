@@ -34,17 +34,21 @@ class OpenAIAgentProvider:
         oai_messages = _convert_messages(messages, system)
 
         # Convert tool definitions to OpenAI function format
-        oai_tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": t["name"],
-                    "description": t.get("description", ""),
-                    "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
-                },
-            }
-            for t in tools
-        ] if tools else []
+        oai_tools = (
+            [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+                    },
+                }
+                for t in tools
+            ]
+            if tools
+            else []
+        )
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -114,14 +118,16 @@ def _convert_messages(messages: list[dict[str, Any]], system: str) -> list[dict[
                         if block.get("type") == "text":
                             text_parts.append(block["text"])
                         elif block.get("type") == "tool_use":
-                            tool_calls.append({
-                                "id": block["id"],
-                                "type": "function",
-                                "function": {
-                                    "name": block["name"],
-                                    "arguments": json.dumps(block.get("input", {})),
-                                },
-                            })
+                            tool_calls.append(
+                                {
+                                    "id": block["id"],
+                                    "type": "function",
+                                    "function": {
+                                        "name": block["name"],
+                                        "arguments": json.dumps(block.get("input", {})),
+                                    },
+                                }
+                            )
                 assistant_msg: dict[str, Any] = {"role": "assistant"}
                 if text_parts:
                     assistant_msg["content"] = "\n".join(text_parts)
@@ -132,11 +138,13 @@ def _convert_messages(messages: list[dict[str, Any]], system: str) -> list[dict[
                 # Convert tool_result blocks to OpenAI tool messages
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
-                        oai.append({
-                            "role": "tool",
-                            "tool_call_id": block.get("tool_use_id", ""),
-                            "content": block.get("content", ""),
-                        })
+                        oai.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": block.get("tool_use_id", ""),
+                                "content": block.get("content", ""),
+                            }
+                        )
                     elif isinstance(block, dict) and block.get("type") == "text":
                         oai.append({"role": "user", "content": block["text"]})
                     elif isinstance(block, str):

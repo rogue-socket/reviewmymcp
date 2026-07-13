@@ -277,7 +277,9 @@ def test_replay_to_file(sample_stdio_log):
         path = f.name
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--output-file", path, "--no-llm-judges"])
+    result = runner.invoke(
+        cli, ["replay", str(sample_stdio_log), "--output", "json", "--output-file", path, "--no-llm-judges"]
+    )
     assert result.exit_code in (0, 1)
     content = Path(path).read_text()
     parsed = json.loads(content)
@@ -288,7 +290,9 @@ def test_replay_to_file(sample_stdio_log):
 
 def test_replay_dimension_filter(sample_stdio_log):
     runner = CliRunner()
-    result = runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--dimensions", "efficiency", "--no-llm-judges"])
+    result = runner.invoke(
+        cli, ["replay", str(sample_stdio_log), "--output", "json", "--dimensions", "efficiency", "--no-llm-judges"]
+    )
     parsed = json.loads(result.output)
     dims = [ds["dimension"] for ds in parsed["dimension_scores"]]
     assert dims == ["efficiency"]
@@ -298,7 +302,10 @@ def test_diff_command(sample_stdio_log):
     runner = CliRunner()
 
     # Generate two identical reports
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f1, tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f2:
+    with (
+        tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f1,
+        tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f2,
+    ):
         path1, path2 = f1.name, f2.name
 
     runner.invoke(cli, ["replay", str(sample_stdio_log), "--output", "json", "--output-file", path1, "--no-llm-judges"])
@@ -316,6 +323,16 @@ def test_audit_no_target():
     runner = CliRunner()
     result = runner.invoke(cli, ["audit"])
     assert result.exit_code == 2
+
+
+def test_parse_server_command_honors_quoted_arguments():
+    assert cli_module._parse_server_command('python -m demo_server --label "two words"') == [
+        "python",
+        "-m",
+        "demo_server",
+        "--label",
+        "two words",
+    ]
 
 
 def test_replay_exits_1_with_critical_findings(sample_stdio_log):
@@ -347,6 +364,158 @@ def test_audit_exits_0_without_high_or_critical_findings():
     assert result.exit_code == 0
 
     Path(path).unlink()
+
+
+def test_audit_config_applies_output_dimensions_and_severity(sample_stdio_log, tmp_path):
+    config_path = tmp_path / "audit-config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "dimensions": ["accuracy"],
+                "min_severity": "critical",
+                "output_format": "json",
+            }
+        )
+    )
+
+    runner = CliRunner()
+    filtered = runner.invoke(
+        cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--no-llm-judges"]
+    )
+    filtered_report = json.loads(filtered.output)
+
+    assert filtered.exit_code == 0
+    assert [score["dimension"] for score in filtered_report["dimension_scores"]] == ["accuracy"]
+    assert filtered_report["top_findings"] == []
+
+    overridden = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--log-file",
+            str(sample_stdio_log),
+            "--config",
+            str(config_path),
+            "--severity",
+            "high",
+            "--no-llm-judges",
+        ],
+    )
+    overridden_report = json.loads(overridden.output)
+
+    assert overridden.exit_code == 1
+    assert [finding["severity"] for finding in overridden_report["top_findings"]] == ["high"]
+
+
+def test_audit_config_applies_output_file_and_redaction_settings(sample_stdio_log, tmp_path, monkeypatch):
+    config_path = tmp_path / "audit-config.json"
+    output_path = tmp_path / "audit-report.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output_format": "json",
+                "output_file": str(output_path),
+                "redaction": {"enabled": False, "extra_patterns": ["INTERNAL-[0-9]+"]},
+            }
+        )
+    )
+
+    from reviewmymcp.ingest import file_loader
+    from reviewmymcp.ingest.schema import Transport
+
+    original_load_file = file_loader.load_file
+    seen: dict = {}
+
+    def load_file_spy(*args, **kwargs):
+        seen.update(kwargs)
+        return original_load_file(*args, **kwargs)
+
+    monkeypatch.setattr(file_loader, "load_file", load_file_spy)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--no-llm-judges"]
+    )
+
+    assert result.exit_code == 1
+    assert seen == {"transport": Transport.STDIO, "redact": False, "extra_redaction_patterns": ["INTERNAL-[0-9]+"]}
+    assert json.loads(output_path.read_text())["total_events"] == 13
+
+
+def test_audit_config_applies_scoring_values(sample_stdio_log, tmp_path):
+    config_path = tmp_path / "audit-config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "dimensions": ["accuracy"],
+                "min_severity": "high",
+                "output_format": "json",
+                "scoring": {"severity_weights": {"high": 20.0}, "curve_factor": 2.0},
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--no-llm-judges"]
+    )
+    report = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert report["dimension_scores"][0]["score"] == 91.1
+
+
+def test_audit_config_applies_efficiency_thresholds(tmp_path):
+    log_path = tmp_path / "tools.ndjson"
+    config_path = tmp_path / "audit-config.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {"tools": [{"name": "search", "description": "word " * 20, "inputSchema": {}}]},
+                "direction": "server_to_client",
+            }
+        )
+        + "\n"
+    )
+    config_path.write_text(
+        json.dumps(
+            {
+                "dimensions": ["efficiency"],
+                "output_format": "json",
+                "thresholds": {"description_bloat_single": 1},
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--log-file", str(log_path), "--config", str(config_path), "--no-llm-judges"])
+    report = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert report["top_findings"][0]["check_id"] == "efficiency.description-bloat"
+
+
+def test_audit_config_uses_judge_provider_unless_cli_overrides(sample_stdio_log, tmp_path, monkeypatch):
+    config_path = tmp_path / "audit-config.json"
+    config_path.write_text(json.dumps({"judge": {"provider": "gemini"}}))
+    providers: list[str] = []
+
+    def build_judge(provider: str, model: str):
+        providers.append(provider)
+        return None
+
+    monkeypatch.setattr(cli_module, "_build_judge", build_judge)
+    runner = CliRunner()
+
+    runner.invoke(cli, ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path)])
+    runner.invoke(
+        cli,
+        ["audit", "--log-file", str(sample_stdio_log), "--config", str(config_path), "--judge-provider", "openai"],
+    )
+
+    assert providers == ["gemini", "openai"]
 
 
 @pytest.fixture

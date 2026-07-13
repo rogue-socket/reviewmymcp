@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -39,11 +41,38 @@ class SyncJudgeAdapter:
 
     def __init__(self, provider: JudgeProvider) -> None:
         self._provider = provider
+        self._loop = asyncio.new_event_loop()
+        self._loop_ready = threading.Event()
+        self._lock = threading.Lock()
+        self._closed = False
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        self._loop_ready.wait()
+
+    def _run_loop(self) -> None:
+        asyncio.set_event_loop(self._loop)
+        self._loop_ready.set()
+        self._loop.run_forever()
+        self._loop.close()
 
     def complete(self, request: JudgeRequest) -> JudgeResponse:
-        import asyncio
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Judge adapter is closed")
+            future = asyncio.run_coroutine_threadsafe(self._provider.complete(request), self._loop)
+            return future.result()
 
-        return asyncio.run(self._provider.complete(request))
+    def close(self) -> None:
+        """Release provider resources and stop the private async runtime."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            aclose = getattr(self._provider, "aclose", None)
+            if aclose:
+                asyncio.run_coroutine_threadsafe(aclose(), self._loop).result()
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        self._thread.join()
 
     @property
     def provider_name(self) -> str:

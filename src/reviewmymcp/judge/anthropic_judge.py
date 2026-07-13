@@ -9,6 +9,8 @@ subscription instead of pay-per-token API credits.
 from __future__ import annotations
 
 import os
+from typing import Any
+from uuid import uuid4
 
 from anthropic import AsyncAnthropic
 
@@ -25,6 +27,7 @@ class AnthropicJudge:
         self._model = model or DEFAULT_MODEL
         self._use_sdk = not self._api_key
         self._client = None if self._use_sdk else AsyncAnthropic(api_key=self._api_key)
+        self._sdk_clients: dict[str, Any] = {}
 
     async def complete(self, request: JudgeRequest) -> JudgeResponse:
         if self._use_sdk:
@@ -59,16 +62,19 @@ class AnthropicJudge:
         from claude_agent_sdk import (
             AssistantMessage,
             ClaudeAgentOptions,
+            ClaudeSDKClient,
             TextBlock,
-            query,
         )
 
         text_parts: list[str] = []
         try:
-            async for msg in query(
-                prompt=request.user,
-                options=ClaudeAgentOptions(system_prompt=request.system, max_turns=1),
-            ):
+            client = self._sdk_clients.get(request.system)
+            if client is None:
+                client = ClaudeSDKClient(ClaudeAgentOptions(system_prompt=request.system, max_turns=1))
+                await client.connect()
+                self._sdk_clients[request.system] = client
+            await client.query(request.user, session_id=uuid4().hex)
+            async for msg in client.receive_response():
                 if isinstance(msg, AssistantMessage):
                     for blk in msg.content:
                         if isinstance(blk, TextBlock):
@@ -87,3 +93,14 @@ class AnthropicJudge:
                 model="claude-agent-sdk",
                 provider=self.provider_name,
             )
+
+    async def aclose(self) -> None:
+        """Disconnect persistent SDK clients once an audit completes."""
+        for client in self._sdk_clients.values():
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+        self._sdk_clients.clear()
+        if self._client is not None:
+            await self._client.close()
